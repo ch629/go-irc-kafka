@@ -49,6 +49,7 @@ func makeProtoMessage(message ChannelMessage) *pb.ChatMessage {
 func Login() {
 	writeCommand("PASS oauth:%v", BaseBotConfig.OAuthToken)
 	writeCommand("NICK %s", BaseBotConfig.Name)
+	writeCommand("CAP REQ :twitch.tv/tags")
 }
 
 func checkError(err error) {

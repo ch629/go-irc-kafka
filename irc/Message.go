@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// TODO: Include some of the tag data here (And in the protobuf object? - Could just be the map/struct)
 type ChannelMessage struct {
 	Timestamp time.Time `json:"timestamp"`
 	Sender    string    `json:"sender"`
@@ -17,18 +18,14 @@ type ChannelMessage struct {
 }
 
 func handleMessage(message parser.Message) {
-	user := strings.Split(message.Prefix, "!")[0]
-	text := message.Params
-	split := strings.Split(text, " ")
-
-	channel := strings.TrimPrefix(split[0], "#")
-	mes := strings.TrimPrefix(strings.Join(split[1:], " "), channel+" ")
+	user := strings.Split(message.Username, "!")[0]
+	prefixes := strings.Split(message.Prefix, " ")
 
 	chanMes := ChannelMessage{
 		Timestamp: message.Timestamp,
 		Sender:    user,
-		Channel:   channel,
-		Message:   mes,
+		Channel:   prefixes[0][1:],
+		Message:   message.Params,
 	}
 	// TODO: Remove this logic eventually
 	messageJson, _ := json.Marshal(chanMes)
