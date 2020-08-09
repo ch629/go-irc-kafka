@@ -3,6 +3,7 @@ package irc
 import (
 	"fmt"
 	"github.com/golang/protobuf/ptypes"
+	structpb "github.com/golang/protobuf/ptypes/struct"
 	pb "go-irc/proto"
 	"net"
 	"os"
@@ -34,7 +35,7 @@ func writeCommand(command string, a ...interface{}) {
 	Write(fmt.Sprintf(command, a...))
 }
 
-func makeProtoMessage(message ChannelMessage) *pb.ChatMessage {
+func makeProtoMessage(message *ChannelMessage) *pb.ChatMessage {
 	ts, err := ptypes.TimestampProto(message.Timestamp)
 	checkError(err)
 
@@ -43,6 +44,23 @@ func makeProtoMessage(message ChannelMessage) *pb.ChatMessage {
 		Sender:    message.Sender,
 		Message:   message.Message,
 		Timestamp: ts,
+		Metadata:  mapMapToStruct(message.Metadata),
+	}
+}
+
+func mapMapToStruct(data map[string]string) *structpb.Struct {
+	var structMap = make(map[string]*structpb.Value)
+	for k, v := range data {
+		if len(v) > 0 {
+			structMap[k] = &structpb.Value{
+				Kind: &structpb.Value_StringValue{
+					StringValue: v,
+				},
+			}
+		}
+	}
+	return &structpb.Struct{
+		Fields: structMap,
 	}
 }
 

@@ -43,13 +43,12 @@ func BatchPoll() {
 			select {
 			case message, ok := <-kafkaOutput:
 				if !ok {
-					// TODO: Check this, think it'll only happen if there is a problem with the channel somehow, so I guess we could just skip that message?
-					fmt.Println("!ok??")
+					fmt.Println("Failed to get kafka output, ignoring")
 					continue
 				}
 
 				// TODO: Should we be handling the mapping here, or keep as []byte and map when it's pushed
-				// TODO: Configurable keys???
+				// TODO: What can we key this on?
 				batch = append(batch, kafka.Message{Key: []byte("KEY"), Value: message})
 				if len(batch) == batchSize {
 					go push(batch)
@@ -57,8 +56,6 @@ func BatchPoll() {
 					expire = time.After(batchTimeout)
 				}
 			case <-expire:
-				// TODO: Do we push from here, or do we add it to another channel which takes batches & another goroutine worker processes these as they come in?
-				//  Then we can reformat some of this to work in more of a "worker" form
 				go push(batch)
 				batch = batch[:0]
 				expire = time.After(batchTimeout)

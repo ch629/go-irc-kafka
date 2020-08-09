@@ -19,16 +19,14 @@ var (
 	bytes  = make(chan byte)
 	Output = make(chan Message)
 
-	metaName     = ""
+	metaName = ""
+	// Needed to transition from metadata to prefix
+	lastSpace    = false
 	metadataDone = false
 
-	metadata map[string]string
+	metadata = make(map[string]string)
 	prefix   *string
 
-	// Prefix is the following split by ' '
-	//  Username/Server
-	//  Command
-	//  Channel (For PRIVMSG)
 	user       *string
 	command    *string
 	parameters string
@@ -122,13 +120,21 @@ func handleMetadata(b byte) bool {
 			sb.Reset()
 		} else if b == ';' {
 			metadata[metaName] = sb.String()
-			metaName = ""
 			sb.Reset()
-		} else if b == ':' && (len(metadata) == 0 || metaName == "user-type") {
+		} else if b == ' ' {
+			metadata[metaName] = sb.String()
+			lastSpace = true
+			sb.Reset()
+		} else if b == ':' && (len(metadata) == 0 || lastSpace) {
 			metadataDone = true
 			sb.Reset()
 		} else {
 			write(b)
+		}
+
+		// TODO: Find a better way to handle this
+		if b != ' ' {
+			lastSpace = false
 		}
 
 		return true
