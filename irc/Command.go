@@ -39,6 +39,12 @@ func ReadInput() {
 		if f, ok := commandMap[message.Command]; ok {
 			f(message)
 		} else {
+			// TODO: Figure out how we can parse this better -> It thinks before the : is metadata & pulling in user-type from the previous message sent
+			// PING :tmi.twitch.tv
+			if message.Metadata["user-type"] == "PING" {
+				handlePing(message)
+				return
+			}
 			// Print out message if not known
 			bytes, _ := json.Marshal(message)
 			fmt.Printf("Message: %v\n", string(bytes))
