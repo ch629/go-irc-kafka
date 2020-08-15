@@ -9,7 +9,7 @@ type parserWriter struct{}
 // Max []byte length = 512 including CRLF
 func (parserWriter) Write(p []byte) (int, error) {
 	for _, b := range p {
-		PushByte(b)
+		HandleByte(b)
 	}
 
 	return len(p), nil

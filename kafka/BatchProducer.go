@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	batchSize    = 100
+	batchSize    = 50
 	batchTimeout = time.Second * 10
 	writer       *kafka.Writer
 )

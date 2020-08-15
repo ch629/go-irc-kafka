@@ -30,9 +30,6 @@ func main() {
 
 	irc.InitializeConfig()
 
-	// Sets up the parser to read bytes sent from the TCP connection
-	parser.PollChannel()
-
 	// Kafka producer output
 	kafka.BatchPoll()
 

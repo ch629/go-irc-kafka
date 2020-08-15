@@ -5,169 +5,190 @@ import (
 	"time"
 )
 
-type Message struct {
-	Timestamp time.Time         `json:"timestamp"`
-	Metadata  map[string]string `json:"metadata"`
-	Username  string            `json:"username"`
-	Prefix    string            `json:"prefix"`
-	Command   string            `json:"command"`
-	Params    string            `json:"params"`
-}
-
 var (
-	sb     = strings.Builder{}
-	bytes  = make(chan byte)
-	Output = make(chan Message)
+	lastByte       byte
+	hasInitialized bool
 
-	metaName = ""
-	// Needed to transition from metadata to prefix
-	lastSpace    = false
-	metadataDone = false
+	inMetadata bool
+	metadata   map[string]string
+	inPrefix   bool
+	prefix     string
+	inCommand  bool
+	command    string
+	inArgs     bool
+	args       []string
 
-	metadata = make(map[string]string)
-	prefix   *string
+	buffer strings.Builder
 
-	user       *string
-	command    *string
-	parameters string
+	metaName string
+
+	Output = make(chan NewMessage)
 )
 
-func PushByte(b byte) {
-	bytes <- b
-}
-
-func PollChannel() {
-	go func() {
-		for b := range bytes {
-			handleByte(b)
-		}
-	}()
-}
-
-func outputMessage(message Message) {
-	Output <- message
-}
-
-func emptyOrValue(str *string) string {
-	if str == nil {
-		return ""
-	}
-	return *str
-}
-
-func makeMessage() Message {
-	return Message{
-		Timestamp: time.Now().UTC(),
-		Metadata:  metadata,
-		Username:  emptyOrValue(user),
-		Command:   emptyOrValue(command),
-		Prefix:    emptyOrValue(prefix),
-		Params:    parameters,
-	}
-}
-
-func finishMessage() {
-	outputMessage(makeMessage())
-}
-
-func resetMessage() {
-	metadataDone = false
-	metadata = make(map[string]string)
-	prefix = nil
-	user = nil
-	command = nil
-	parameters = ""
-
-	sb.Reset()
+func init() {
+	resetState()
 }
 
 func write(b byte) {
-	sb.WriteByte(b)
+	buffer.WriteByte(b)
 }
 
-func addParameter() {
-	parameters = sb.String()
-	sb.Reset()
+func resetState() {
+	lastByte = '\n'
+	hasInitialized = false
+
+	inMetadata = false
+	metadata = make(map[string]string)
+	inPrefix = false
+	prefix = ""
+	inCommand = false
+	command = ""
+	inArgs = false
+	args = []string{}
+
+	buffer.Reset()
 }
 
-func handleByte(b byte) {
-	if b == '\r' {
-		addParameter()
-		finishMessage()
-		resetMessage()
-		return
+func initState(b byte) {
+	hasInitialized = true
+	if b == '@' {
+		inMetadata = true
+	} else if b == ':' {
+		inPrefix = true
+	} else {
+		inCommand = true
+		// First byte of the command
+		write(b)
 	}
+}
+
+func nextState() {
+	if inMetadata {
+		inMetadata = false
+		inPrefix = true
+
+		metadata[metaName] = popBuffer()
+		metaName = ""
+	} else if inPrefix {
+		inPrefix = false
+		inCommand = true
+	} else if inCommand {
+		inCommand = false
+		inArgs = true
+	} else if inArgs {
+		args = append(args, popBuffer())
+	}
+}
+
+type NewMessage struct {
+	Timestamp time.Time         `json:"timestamp"`
+	Metadata  map[string]string `json:"metadata"`
+	Prefix    string            `json:"prefix"`
+	Command   string            `json:"command"`
+	Args      []string          `json:"args"`
+}
+
+func buildMessage() {
+	args = append(args, popBuffer())
+
+	newMes := NewMessage{
+		Timestamp: time.Now().UTC(),
+		Metadata:  metadata,
+		Prefix:    prefix,
+		Command:   command,
+		Args:      args,
+	}
+
+	Output <- newMes
+}
+
+// TODO: Rather than pushing straight into this, would it be better to be polling a byte channel?
+func HandleByte(b byte) {
+	defer func() {
+		lastByte = b
+	}()
 
 	if b == '\n' {
+		// Ignore this as we are handling it in the \r
+		// TODO: We could look at previous byte being \r then handling it in here? Would allow us to handle \n if it is received in a message normally?
 		return
 	}
 
-	if handleMetadata(b) {
+	// TODO: Any validation if we get a malformed message?
+	if !hasInitialized {
+		initState(b)
 		return
 	}
 
-	if handlePrefix(b) {
+	if b == '\r' {
+		buildMessage()
+		resetState()
 		return
 	}
 
+	if lastByte == ' ' && b == ':' {
+		nextState()
+		return
+	}
+
+	if inMetadata {
+		handleMetadata(b)
+		return
+	}
+
+	if inPrefix {
+		handlePrefix(b)
+		return
+	}
+
+	if inCommand {
+		handleCommand(b)
+		return
+	}
+
+	if inArgs {
+		handleArgs(b)
+	}
+}
+
+func popBuffer() string {
+	tmp := buffer.String()
+	buffer.Reset()
+	return tmp
+}
+
+func handleMetadata(b byte) {
+	if b == '=' {
+		metaName = popBuffer()
+	} else if b == ';' {
+		if buffer.Len() > 0 {
+			metadata[metaName] = popBuffer()
+		}
+		metaName = ""
+	} else {
+		write(b)
+	}
+}
+
+func handlePrefix(b byte) {
+	if b == ' ' {
+		// TODO: Do we break this down into servername, nick, user & host?
+		prefix = popBuffer()
+		nextState()
+	} else {
+		write(b)
+	}
+}
+
+func handleCommand(b byte) {
+	if b == ' ' {
+		command = popBuffer()
+		nextState()
+	} else {
+		write(b)
+	}
+}
+
+func handleArgs(b byte) {
 	write(b)
-}
-
-func handleMetadata(b byte) bool {
-	if !metadataDone {
-		if b == '=' {
-			metaName = sb.String()
-			sb.Reset()
-		} else if b == ';' {
-			metadata[metaName] = sb.String()
-			sb.Reset()
-		} else if b == ' ' {
-			metadata[metaName] = sb.String()
-			lastSpace = true
-			sb.Reset()
-		} else if b == ':' && (len(metadata) == 0 || lastSpace) {
-			metadataDone = true
-			sb.Reset()
-		} else {
-			write(b)
-		}
-
-		// TODO: Find a better way to handle this
-		if b != ' ' {
-			lastSpace = false
-		}
-
-		return true
-	}
-
-	return false
-}
-
-func handlePrefix(b byte) bool {
-	if prefix == nil {
-		if b == ' ' {
-			if user == nil {
-				tmpUser := sb.String()
-				user = &tmpUser
-				sb.Reset()
-			} else if command == nil {
-				tmpCommand := sb.String()
-				command = &tmpCommand
-				sb.Reset()
-			} else {
-				// We need this space, if we aren't breaking it down any further here (I don't think we can as it changes dependent on the commands)
-				//  Unless we store the rest in an array of strings?
-				write(b)
-			}
-		} else if b == ':' {
-			tmpPrefix := sb.String()
-			prefix = &tmpPrefix
-
-			sb.Reset()
-		} else {
-			write(b)
-		}
-		return true
-	}
-	return false
 }

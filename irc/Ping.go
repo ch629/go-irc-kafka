@@ -5,6 +5,6 @@ import (
 	"go-irc/parser"
 )
 
-func handlePing(message parser.Message) {
-	Write(fmt.Sprintf("PONG %v", message.Params))
+func handlePing(message parser.NewMessage) {
+	Write(fmt.Sprintf("PONG :%v", message.Args[0]))
 }
