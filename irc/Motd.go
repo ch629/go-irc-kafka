@@ -8,12 +8,12 @@ import (
 
 var motd strings.Builder
 
-func handleMotd(message parser.NewMessage) {
+func handleMotd(message parser.Message) {
 	// Trim out the username from the beginning of each MOTD message
 	motd.WriteString(fmt.Sprintf("%v\n", strings.TrimPrefix(message.Args[1], BaseBotConfig.Name)))
 }
 
-func handleMotdEnd(_ parser.NewMessage) {
+func handleMotdEnd(_ parser.Message) {
 	fmt.Println(motd.String())
 	motd.Reset()
 

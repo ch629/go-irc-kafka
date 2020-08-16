@@ -22,7 +22,7 @@ var (
 
 	metaName string
 
-	Output = make(chan NewMessage)
+	Output = make(chan Message)
 )
 
 func init() {
@@ -76,11 +76,13 @@ func nextState() {
 		inCommand = false
 		inArgs = true
 	} else if inArgs {
-		args = append(args, popBuffer())
+		if buffer.Len() > 0 {
+			addArgs()
+		}
 	}
 }
 
-type NewMessage struct {
+type Message struct {
 	Timestamp time.Time         `json:"timestamp"`
 	Metadata  map[string]string `json:"metadata"`
 	Prefix    string            `json:"prefix"`
@@ -88,10 +90,16 @@ type NewMessage struct {
 	Args      []string          `json:"args"`
 }
 
-func buildMessage() {
-	args = append(args, popBuffer())
+func addArgs() {
+	if buffer.Len() > 0 {
+		args = append(args, popBuffer())
+	}
+}
 
-	newMes := NewMessage{
+func buildMessage() {
+	addArgs()
+
+	newMes := Message{
 		Timestamp: time.Now().UTC(),
 		Metadata:  metadata,
 		Prefix:    prefix,

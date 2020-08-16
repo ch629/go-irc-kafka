@@ -1,8 +1,6 @@
 package irc
 
 import (
-	"encoding/json"
-	"fmt"
 	"go-irc/kafka"
 	"go-irc/parser"
 	"strings"
@@ -18,19 +16,15 @@ type ChannelMessage struct {
 	Metadata  map[string]string `json:"metadata"`
 }
 
-func handleMessage(message parser.NewMessage) {
+func handleMessage(message parser.Message) {
 	user := strings.Split(message.Prefix, "!")[0]
 	mes := &ChannelMessage{
 		Timestamp: message.Timestamp,
 		Sender:    user,
-		Channel:   message.Args[0],
+		Channel:   message.Args[0][1:],
 		Message:   message.Args[1],
 		Metadata:  message.Metadata,
 	}
-
-	b, _ := json.Marshal(mes)
-
-	fmt.Println("Pushing ChannelMessage: ", string(b))
 
 	go kafka.WriteChatMessage(makeProtoMessage(mes))
 }
