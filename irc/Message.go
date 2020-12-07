@@ -19,11 +19,11 @@ type ChannelMessage struct {
 func handleMessage(message parser.Message) {
 	user := strings.Split(message.Prefix, "!")[0]
 	mes := &ChannelMessage{
-		Timestamp: message.Timestamp,
+		Timestamp: time.Now(),
 		Sender:    user,
-		Channel:   message.Args[0][1:],
-		Message:   message.Args[1],
-		Metadata:  message.Metadata,
+		Channel:   message.Params[0][1:],
+		Message:   message.Params[1],
+		Metadata:  message.Tags,
 	}
 
 	go kafka.WriteChatMessage(makeProtoMessage(mes))

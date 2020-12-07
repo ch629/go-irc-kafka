@@ -18,7 +18,7 @@ var commandMap = map[string]func(message parser.Message){
 	"353": func(message parser.Message) {
 		// RPL_NAMREPLY
 		//  <channel> :[[@|+]<nick> [[@|+]<nick> [...]]]
-		fmt.Println("Got users: ", message.Args)
+		fmt.Println("Got users: ", message.Params)
 	},
 	"366": func(message parser.Message) {
 		// RPL_ENDOFNAMES
@@ -27,10 +27,10 @@ var commandMap = map[string]func(message parser.Message){
 	},
 	"JOIN": func(message parser.Message) {
 		// Joined channel
-		fmt.Println("Joined channel: ", message.Args)
+		fmt.Println("Joined channel: ", message.Params)
 	},
 	"421": func(message parser.Message) {
-		fmt.Println("Invalid command: ", message.Args)
+		fmt.Println("Invalid command: ", message.Params)
 	},
 }
 
