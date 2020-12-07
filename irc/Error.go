@@ -5,6 +5,6 @@ import (
 	"go-irc/parser"
 )
 
-func handleErrorMessage(message parser.NewMessage) {
+func handleErrorMessage(message parser.OldMessage) {
 	fmt.Println("Error from IRC", message)
 }

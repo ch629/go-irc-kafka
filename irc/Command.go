@@ -6,30 +6,30 @@ import (
 	"go-irc/parser"
 )
 
-var commandMap = map[string]func(message parser.NewMessage){
+var commandMap = map[string]func(message parser.OldMessage){
 	"PING":    handlePing,
 	"ERROR":   handleErrorMessage,
 	"PRIVMSG": handleMessage,
-	"375": func(message parser.NewMessage) {
+	"375": func(message parser.OldMessage) {
 		// RPL_MOTDSTART
 	},
 	"372": handleMotd,
 	"376": handleMotdEnd,
-	"353": func(message parser.NewMessage) {
+	"353": func(message parser.OldMessage) {
 		// RPL_NAMREPLY
 		//  <channel> :[[@|+]<nick> [[@|+]<nick> [...]]]
 		fmt.Println("Got users: ", message.Args)
 	},
-	"366": func(message parser.NewMessage) {
+	"366": func(message parser.OldMessage) {
 		// RPL_ENDOFNAMES
 		// <channel> :End of /NAMES list
 		fmt.Println("End of names list")
 	},
-	"JOIN": func(message parser.NewMessage) {
+	"JOIN": func(message parser.OldMessage) {
 		// Joined channel
 		fmt.Println("Joined channel: ", message.Args)
 	},
-	"421": func(message parser.NewMessage) {
+	"421": func(message parser.OldMessage) {
 		fmt.Println("Invalid command: ", message.Args)
 	},
 }

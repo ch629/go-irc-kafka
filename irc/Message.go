@@ -16,7 +16,7 @@ type ChannelMessage struct {
 	Metadata  map[string]string `json:"metadata"`
 }
 
-func handleMessage(message parser.NewMessage) {
+func handleMessage(message parser.OldMessage) {
 	user := strings.Split(message.Prefix, "!")[0]
 	mes := &ChannelMessage{
 		Timestamp: message.Timestamp,

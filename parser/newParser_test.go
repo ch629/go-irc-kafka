@@ -15,7 +15,7 @@ func Test_Scan(t *testing.T) {
 	msg, err := scanner.Scan()
 
 	assert.NoError(t, err)
-	assert.Equal(t, &TestMessage{
+	assert.Equal(t, &Message{
 		Tags: map[string]string{
 			"test": "abc",
 			"foo":  "bar",
@@ -39,7 +39,7 @@ func Test_Other(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	assert.Equal(t, &TestMessage{
+	assert.Equal(t, &Message{
 		Prefix:  "tmi.twitch.tv",
 		Command: "CAP",
 		Params: []string{
@@ -58,7 +58,7 @@ func Test_Other2(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	assert.Equal(t, &TestMessage{
+	assert.Equal(t, &Message{
 		Prefix:  "tmi.twitch.tv",
 		Command: "001",
 		Params: []string{
@@ -76,7 +76,7 @@ func Test_Other3(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	assert.Equal(t, &TestMessage{
+	assert.Equal(t, &Message{
 		Tags: map[string]string{
 			"badge-info":                    "subscriber/8",
 			"badges":                        "subscriber/6,bits/75000",

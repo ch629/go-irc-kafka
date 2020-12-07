@@ -17,7 +17,7 @@ type (
 		*bufio.Reader
 	}
 
-	TestMessage struct {
+	Message struct {
 		Tags    map[string]string
 		Prefix  string
 		Command string
@@ -25,11 +25,11 @@ type (
 	}
 )
 
-func (m *TestMessage) HasTags() bool {
+func (m *Message) HasTags() bool {
 	return len(m.Tags) > 0
 }
 
-func (m *TestMessage) HasPrefix() bool {
+func (m *Message) HasPrefix() bool {
 	return len(m.Prefix) > 0
 }
 
@@ -39,19 +39,28 @@ func NewScanner(r io.Reader) *Scanner {
 	}
 }
 
-// TODO: A blank line with just CRLF should be valid, but just ignored
-// TODO: Rework with peek instead of read & unread
-func (s *Scanner) Scan() (*TestMessage, error) {
-	// TODO: If command is first, then r needs to be passed in
-	r := s.read()
+// TODO: EOF checks
+// TODO: Escape inside of other funcs
+// Scan a line from the reader
+func (s *Scanner) Scan() (*Message, error) {
+	if s.isCrlf() {
+		return &Message{}, nil
+	}
+
+	r, err := s.peekRune()
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to peek rune due to %w", err)
+	}
 
 	if r == eof {
 		return nil, fmt.Errorf("first character was an eof")
 	}
 
-	message := &TestMessage{}
+	message := &Message{}
 
 	if r == '@' {
+		s.consume()
 		tags, err := s.readTags()
 
 		if err != nil {
@@ -59,10 +68,15 @@ func (s *Scanner) Scan() (*TestMessage, error) {
 		}
 
 		message.Tags = tags
-		r = s.read()
+		r, err = s.peekRune()
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to peek rune due to %w", err)
+		}
 	}
 
 	if r == ':' {
+		s.consume()
 		prefix, err := s.readPrefix()
 
 		if err != nil {
@@ -99,6 +113,7 @@ var escapedMap = map[rune]rune{
 	'n':  '\n',
 }
 
+// Reads the tags BNF
 func (s *Scanner) readTags() (map[string]string, error) {
 	tags := make(map[string]string)
 	key := true
@@ -156,6 +171,7 @@ func (s *Scanner) readTags() (map[string]string, error) {
 }
 
 // TODO: Prefix struct?
+// Reads the prefix BNF
 func (s *Scanner) readPrefix() (string, error) {
 	var sb strings.Builder
 	for {
@@ -170,6 +186,7 @@ func (s *Scanner) readPrefix() (string, error) {
 	return "", nil
 }
 
+// Reads the command BNF
 func (s *Scanner) readCommand() (string, error) {
 	var sb strings.Builder
 	for {
@@ -184,26 +201,27 @@ func (s *Scanner) readCommand() (string, error) {
 	return "", nil
 }
 
+// Reads the param BNF
 func (s *Scanner) readParams() ([]string, error) {
 	params := make([]string, 0)
 	for {
-		r := s.read()
+		r, err := s.peekRune()
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to peek rune due to %w", err)
+		}
 
 		if r == ' ' {
 			continue
 		}
 
-		if r == '\r' {
-			r = s.read()
-
-			if r == '\n' {
-				fmt.Println("returning")
-				return params, nil
-			}
-			return nil, fmt.Errorf("expected a LF after the CR but received %v", r)
+		if s.isCrlf() {
+			return params, nil
 		}
 
 		if r == ':' {
+			// Consume :
+			s.consume()
 			trailing, err := s.readParamTrailing()
 
 			if err != nil {
@@ -225,48 +243,45 @@ func (s *Scanner) readParams() ([]string, error) {
 	return nil, fmt.Errorf("reached the end of params without a CRLF")
 }
 
-// TODO: EOF checks
+// Reads the param trailing BNF
 func (s *Scanner) readParamTrailing() (string, error) {
 	var sb strings.Builder
 	for {
-		r := s.read()
-		if r == '\r' {
-			r = s.read()
-			if r == '\n' {
-				return sb.String(), nil
-			}
-			return "", fmt.Errorf("expected a LF after the CR but received %v", r)
+		if s.isCrlf() {
+			return sb.String(), nil
 		}
 
-		sb.WriteRune(r)
+		sb.WriteRune(s.read())
 	}
 	return "", nil
 }
 
+// Reads the param middle BNF
 func (s *Scanner) readParamMiddle() (string, error) {
 	var sb strings.Builder
-	if err := s.UnreadRune(); err != nil {
-		return "", fmt.Errorf("failed to unread rune for middle param due to %w", err)
-	}
 	for {
-		r := s.read()
+		r, err := s.peekRune()
+
+		if err != nil {
+			return "", fmt.Errorf("failed to peek rune due to %w", err)
+		}
 
 		if r == ' ' {
+			// Consume ' '
+			s.consume()
 			return sb.String(), nil
 		}
 
 		if r == ':' {
-			if err := s.UnreadRune(); err != nil {
-				return "", fmt.Errorf("failed to unread ':' rune due to %w", err)
-			}
 			return sb.String(), nil
 		}
+		r = s.read()
 		sb.WriteRune(r)
 	}
 	return "", nil
 }
 
-// Reads a single rune from the Scanner
+// Reads and consumers a single rune from the Scanner
 func (s *Scanner) read() rune {
 	ch, _, err := s.ReadRune()
 
@@ -276,20 +291,42 @@ func (s *Scanner) read() rune {
 	return ch
 }
 
-func (r *Scanner) PeekRune() (rune, error) {
+// Consumes a single rune from the Scanner with no response
+func (s *Scanner) consume() {
+	_, _, _ = s.ReadRune()
+}
+
+// Reads a single rune from the Scanner without consuming it
+func (s *Scanner) peekRune() (rune, error) {
 	for peekBytes := 4; peekBytes > 0; peekBytes-- { // unicode rune can be up to 4 bytes
-		b, err := r.Peek(peekBytes)
+		b, err := s.Peek(peekBytes)
 		if err == nil {
 			rune, _ := utf8.DecodeRune(b)
 			if rune == utf8.RuneError {
 				return rune, fmt.Errorf("Rune error")
 			}
-			// success
 			return rune, nil
 		}
-		// Otherwise, we ignore Peek errors and try the next smallest number of bytes
 	}
 
-	// Pretty sure we can assume EOF if we get this far
 	return eof, io.EOF
+}
+
+// TODO: Error if it's \r without \n?
+// Detects if the next runes are CRLF
+func (s *Scanner) isCrlf() bool {
+	r, err := s.peekRune()
+
+	if err != nil {
+		return false
+	}
+
+	if r != '\r' {
+		return false
+	}
+
+	// Consume \r
+	s.consume()
+
+	return s.read() == '\n'
 }
