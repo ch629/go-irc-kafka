@@ -2,3 +2,4 @@
 .idea/
 *.swp
 **/.fuse_hidden*
+config.yaml

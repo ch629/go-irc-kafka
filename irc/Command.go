@@ -6,31 +6,31 @@ import (
 	"go-irc/parser"
 )
 
-var commandMap = map[string]func(message parser.OldMessage){
+var commandMap = map[string]func(message parser.Message){
 	"PING":    handlePing,
 	"ERROR":   handleErrorMessage,
 	"PRIVMSG": handleMessage,
-	"375": func(message parser.OldMessage) {
+	"375": func(message parser.Message) {
 		// RPL_MOTDSTART
 	},
 	"372": handleMotd,
 	"376": handleMotdEnd,
-	"353": func(message parser.OldMessage) {
+	"353": func(message parser.Message) {
 		// RPL_NAMREPLY
 		//  <channel> :[[@|+]<nick> [[@|+]<nick> [...]]]
-		fmt.Println("Got users: ", message.Args)
+		fmt.Println("Got users: ", message.Params)
 	},
-	"366": func(message parser.OldMessage) {
+	"366": func(message parser.Message) {
 		// RPL_ENDOFNAMES
 		// <channel> :End of /NAMES list
 		fmt.Println("End of names list")
 	},
-	"JOIN": func(message parser.OldMessage) {
+	"JOIN": func(message parser.Message) {
 		// Joined channel
-		fmt.Println("Joined channel: ", message.Args)
+		fmt.Println("Joined channel: ", message.Params)
 	},
-	"421": func(message parser.OldMessage) {
-		fmt.Println("Invalid command: ", message.Args)
+	"421": func(message parser.Message) {
+		fmt.Println("Invalid command: ", message.Params)
 	},
 }
 

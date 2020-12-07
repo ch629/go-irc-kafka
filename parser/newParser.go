@@ -8,6 +8,8 @@ import (
 	"unicode/utf8"
 )
 
+var Output = make(chan Message)
+
 var eof = rune(0)
 
 // https://ircv3.net/specs/extensions/message-tags.html
@@ -43,8 +45,14 @@ func NewScanner(r io.Reader) *Scanner {
 // TODO: Escape inside of other funcs
 // Scan a line from the reader
 func (s *Scanner) Scan() (*Message, error) {
+	message := &Message{
+		Tags:    map[string]string{},
+		Prefix:  "",
+		Command: "",
+		Params:  []string{},
+	}
 	if s.isCrlf() {
-		return &Message{}, nil
+		return message, nil
 	}
 
 	r, err := s.peekRune()
@@ -56,8 +64,6 @@ func (s *Scanner) Scan() (*Message, error) {
 	if r == eof {
 		return nil, fmt.Errorf("first character was an eof")
 	}
-
-	message := &Message{}
 
 	if r == '@' {
 		s.consume()

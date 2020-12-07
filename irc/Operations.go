@@ -2,11 +2,12 @@ package irc
 
 import (
 	"fmt"
-	"github.com/golang/protobuf/ptypes"
-	structpb "github.com/golang/protobuf/ptypes/struct"
 	pb "go-irc/proto"
 	"net"
 	"os"
+
+	"github.com/golang/protobuf/ptypes"
+	structpb "github.com/golang/protobuf/ptypes/struct"
 )
 
 var output = make(chan []byte)

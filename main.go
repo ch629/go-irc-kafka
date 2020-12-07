@@ -15,9 +15,7 @@ import (
 // https://tools.ietf.org/html/rfc1459.html
 
 // TODO: Maybe add a rest endpoint to join/leave a channel or use a kafka topic with commands to handle from external sources
-var (
-	conn *net.TCPConn
-)
+var conn *net.TCPConn
 
 // TODO: Check if we can have a separate IRC connection per channel? Or batch them, then we can use more coroutines for parsing etc
 // TODO: Check if the Kafka connection is active before we start parsing messages from IRC, would break the initial startup
@@ -45,9 +43,16 @@ func main() {
 
 	// Write data from IRC connection to the parser
 	go func() {
-		reader := bufio.NewReader(conn)
-		_, err = reader.WriteTo(parser.MakeWriter())
-		checkError(err)
+		scanner := parser.NewScanner(bufio.NewReader(conn))
+		for {
+			msg, err := scanner.Scan()
+
+			if err != nil {
+				panic(err)
+			}
+
+			parser.Output <- *msg
+		}
 	}()
 
 	// Setup output back to IRC
