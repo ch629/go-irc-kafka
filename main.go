@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"go-irc/config"
 	"go-irc/irc"
-	"go-irc/kafka"
 	"go-irc/parser"
 	"net"
 	"os"
@@ -18,8 +16,6 @@ import (
 var conn *net.TCPConn
 
 // TODO: Check if we can have a separate IRC connection per channel? Or batch them, then we can use more coroutines for parsing etc
-// TODO: Check if the Kafka connection is active before we start parsing messages from IRC, would break the initial startup
-// TODO: Pull some of this logic into the irc package & rework it slightly so there's less needed in here
 func main() {
 	// TODO: Handle this WaitGroup better
 	wg := sync.WaitGroup{}
@@ -27,9 +23,6 @@ func main() {
 	config.LoadConfig()
 
 	irc.InitializeConfig()
-
-	// Kafka producer output
-	kafka.BatchPoll()
 
 	// Reads entire message objects created by the parser
 	go irc.ReadInput()
@@ -41,22 +34,24 @@ func main() {
 	conn, err = net.DialTCP("tcp", nil, tcpAddr)
 	checkError(err)
 
-	// Write data from IRC connection to the parser
+	ircClient := irc.NewDefaultClient(conn)
+
+	// Take output from the irc parser & send to handlers
 	go func() {
-		scanner := parser.NewScanner(bufio.NewReader(conn))
-		for {
-			msg, err := scanner.Scan()
+		for input := range ircClient.Input() {
+			parser.Output <- input
+		}
+	}()
 
-			if err != nil {
-				panic(err)
-			}
-
-			parser.Output <- *msg
+	// Handle errors from irc parsing
+	go func() {
+		for err := range ircClient.Errors() {
+			fmt.Fprintln(os.Stderr, "error from irc client,", err)
 		}
 	}()
 
 	// Setup output back to IRC
-	go irc.OutputStream(conn)
+	go irc.OutputStream(ircClient)
 
 	irc.Login()
 

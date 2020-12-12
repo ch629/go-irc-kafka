@@ -3,8 +3,10 @@ package irc
 import (
 	"fmt"
 	"go-irc/parser"
+	"os"
 )
 
 func handleErrorMessage(message parser.Message) {
-	fmt.Println("Error from IRC", message)
+	// TODO: Format the message?
+	fmt.Fprintf(os.Stderr, "Received error from IRC: %v\n", message)
 }

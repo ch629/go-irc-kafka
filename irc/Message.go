@@ -7,6 +7,18 @@ import (
 	"time"
 )
 
+var producer *kafka.Producer
+
+func init() {
+	p, err := kafka.NewDefaultProducer()
+
+	if err != nil {
+		panic(err)
+	}
+
+	producer = p
+}
+
 // TODO: Do we want to split out the metadata a bit? Rather than storing in a map
 type ChannelMessage struct {
 	Timestamp time.Time         `json:"timestamp"`
@@ -26,5 +38,5 @@ func handleMessage(message parser.Message) {
 		Metadata:  message.Tags,
 	}
 
-	go kafka.WriteChatMessage(makeProtoMessage(mes))
+	go producer.WriteChatMessage(makeProtoMessage(mes))
 }
