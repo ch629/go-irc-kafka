@@ -135,32 +135,32 @@ func (s *Scanner) readTags() (map[string]string, error) {
 			r = s.read()
 		}
 
-		if !escaped && r == ' ' {
-			// Push key & value pair to map, return tags
-			tags[keyBuilder.String()] = valueBuilder.String()
-			return tags, nil
-		}
+		if !escaped {
+			if r == ' ' {
+				// Push key & value pair to map, return tags
+				tags[keyBuilder.String()] = valueBuilder.String()
+				return tags, nil
+			}
 
-		if !escaped && r == '=' {
-			// Swap from Key to Value
-			key = false
-			continue
-		}
+			if r == '=' {
+				key = false
+				continue
+			}
 
-		if !escaped && r == ';' {
-			// Push key & value pair to map
-			tags[keyBuilder.String()] = valueBuilder.String()
+			if r == ';' {
+				// Push key & value pair to map
+				tags[keyBuilder.String()] = valueBuilder.String()
 
-			keyBuilder.Reset()
-			valueBuilder.Reset()
-			key = true
-			continue
+				keyBuilder.Reset()
+				valueBuilder.Reset()
+				key = true
+				continue
+			}
+
 		}
 
 		if escaped {
-			escapedRune, ok := escapedMap[r]
-
-			if ok {
+			if escapedRune, ok := escapedMap[r]; ok {
 				r = escapedRune
 			}
 		}
@@ -172,8 +172,6 @@ func (s *Scanner) readTags() (map[string]string, error) {
 		}
 
 	}
-
-	return tags, nil
 }
 
 // TODO: Prefix struct?
@@ -189,7 +187,6 @@ func (s *Scanner) readPrefix() (string, error) {
 
 		sb.WriteRune(r)
 	}
-	return "", nil
 }
 
 // Reads the command BNF
@@ -204,7 +201,6 @@ func (s *Scanner) readCommand() (string, error) {
 
 		sb.WriteRune(r)
 	}
-	return "", nil
 }
 
 // Reads the param BNF
@@ -246,7 +242,6 @@ func (s *Scanner) readParams() ([]string, error) {
 
 		params = append(params, middle)
 	}
-	return nil, fmt.Errorf("reached the end of params without a CRLF")
 }
 
 // Reads the param trailing BNF
@@ -259,7 +254,6 @@ func (s *Scanner) readParamTrailing() (string, error) {
 
 		sb.WriteRune(s.read())
 	}
-	return "", nil
 }
 
 // Reads the param middle BNF
@@ -284,7 +278,6 @@ func (s *Scanner) readParamMiddle() (string, error) {
 		r = s.read()
 		sb.WriteRune(r)
 	}
-	return "", nil
 }
 
 // Reads and consumers a single rune from the Scanner

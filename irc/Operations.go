@@ -2,8 +2,8 @@ package irc
 
 import (
 	"fmt"
+	"go-irc/parser"
 	pb "go-irc/proto"
-	"net"
 	"os"
 
 	"github.com/golang/protobuf/ptypes"
@@ -12,11 +12,9 @@ import (
 
 var output = make(chan []byte)
 
-func OutputStream(conn *net.TCPConn) {
+func OutputStream(client IrcClient) {
 	for message := range output {
-		fmt.Print("< ", string(message))
-		_, err := conn.Write(message)
-		checkError(err)
+		client.Output() <- message
 	}
 }
 
@@ -75,5 +73,11 @@ func checkError(err error) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Fatal error: %v", err)
 		os.Exit(1)
+	}
+}
+
+func handleWelcome(_ parser.Message) {
+	for _, channel := range BaseBotConfig.Channels {
+		joinChannel(channel)
 	}
 }

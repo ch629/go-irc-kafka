@@ -7,6 +7,7 @@ import (
 )
 
 var commandMap = map[string]func(message parser.Message){
+	"001":     handleWelcome,
 	"PING":    handlePing,
 	"ERROR":   handleErrorMessage,
 	"PRIVMSG": handleMessage,
