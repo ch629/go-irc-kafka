@@ -10,7 +10,27 @@ import (
 	structpb "github.com/golang/protobuf/ptypes/struct"
 )
 
-var output = make(chan []byte)
+type (
+	// TODO: Better way of handling these (More customizable messages based on RFC 1459)
+	channelMessage struct {
+		Command string
+		Channel string
+	}
+
+	stringMessage struct {
+		String string
+	}
+)
+
+func (message *channelMessage) Bytes() []byte {
+	return []byte(fmt.Sprintf("%v #%v", message.Command, message.Channel))
+}
+
+func (message *stringMessage) Bytes() []byte {
+	return []byte(message.String)
+}
+
+var output = make(chan IrcMessage)
 
 func OutputStream(client IrcClient) {
 	for message := range output {
@@ -18,20 +38,28 @@ func OutputStream(client IrcClient) {
 	}
 }
 
-func Write(message string) {
-	output <- []byte(fmt.Sprintf("%v\r\n", message))
+func Write(message IrcMessage) {
+	output <- message
 }
 
 func joinChannel(channel string) {
-	writeCommand("JOIN #%v", channel)
+	Write(&channelMessage{
+		Command: "JOIN",
+		Channel: channel,
+	})
 }
 
 func leaveChannel(channel string) {
-	writeCommand("PART #%v", channel)
+	Write(&channelMessage{
+		Command: "PART",
+		Channel: channel,
+	})
 }
 
 func writeCommand(command string, a ...interface{}) {
-	Write(fmt.Sprintf(command, a...))
+	Write(&stringMessage{
+		String: fmt.Sprintf(command, a...),
+	})
 }
 
 func makeProtoMessage(message *ChannelMessage) *pb.ChatMessage {
@@ -43,11 +71,11 @@ func makeProtoMessage(message *ChannelMessage) *pb.ChatMessage {
 		Sender:    message.Sender,
 		Message:   message.Message,
 		Timestamp: ts,
-		Metadata:  mapMapToStruct(message.Metadata),
+		Metadata:  makeStruct(message.Metadata),
 	}
 }
 
-func mapMapToStruct(data map[string]string) *structpb.Struct {
+func makeStruct(data map[string]string) *structpb.Struct {
 	var structMap = make(map[string]*structpb.Value)
 	for k, v := range data {
 		if len(v) > 0 {

@@ -11,11 +11,8 @@ var commandMap = map[string]func(message parser.Message){
 	"PING":    handlePing,
 	"ERROR":   handleErrorMessage,
 	"PRIVMSG": handleMessage,
-	"375": func(message parser.Message) {
-		// RPL_MOTDSTART
-	},
-	"372": handleMotd,
-	"376": handleMotdEnd,
+	"372":     handleMotd,
+	"376":     handleMotdEnd,
 	"353": func(message parser.Message) {
 		// RPL_NAMREPLY
 		//  <channel> :[[@|+]<nick> [[@|+]<nick> [...]]]
@@ -35,8 +32,16 @@ var commandMap = map[string]func(message parser.Message){
 	},
 }
 
+var ignoredCommands = map[string]*struct{}{
+	// REPL_MOTDSTART
+	"375": nil,
+}
+
 func ReadInput() {
 	for message := range parser.Output {
+		if _, ok := ignoredCommands[message.Command]; ok {
+			continue
+		}
 		if f, ok := commandMap[message.Command]; ok {
 			f(message)
 		} else {

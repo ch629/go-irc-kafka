@@ -9,7 +9,7 @@ import (
 
 var producer *kafka.Producer
 
-func init() {
+func initializeProducer() {
 	p, err := kafka.NewDefaultProducer()
 
 	if err != nil {
@@ -36,6 +36,10 @@ func handleMessage(message parser.Message) {
 		Channel:   message.Params[0][1:],
 		Message:   message.Params[1],
 		Metadata:  message.Tags,
+	}
+
+	if producer == nil {
+		initializeProducer()
 	}
 
 	go producer.WriteChatMessage(makeProtoMessage(mes))

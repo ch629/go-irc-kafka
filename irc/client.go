@@ -11,17 +11,23 @@ type (
 	// TODO: Close (when closed, input/output need stopping)
 	IrcClient interface {
 		Input() <-chan parser.Message
-		Output() chan<- []byte
+		Output() chan<- IrcMessage
 		Errors() <-chan error
+	}
+
+	IrcMessage interface {
+		Bytes() []byte
 	}
 
 	client struct {
 		conn       *net.TCPConn
 		inputChan  chan parser.Message
-		outputChan chan []byte
+		outputChan chan IrcMessage
 		errorChan  chan error
 	}
 )
+
+var crlfBytes = []byte{'\r', '\n'}
 
 func NewDefaultClient(conn *net.TCPConn) IrcClient {
 	// TODO: Buffer on the channels?
@@ -29,7 +35,7 @@ func NewDefaultClient(conn *net.TCPConn) IrcClient {
 	cli := &client{
 		conn:       conn,
 		inputChan:  make(chan parser.Message),
-		outputChan: make(chan []byte),
+		outputChan: make(chan IrcMessage),
 		errorChan:  errorChan,
 	}
 
@@ -41,7 +47,7 @@ func NewDefaultClient(conn *net.TCPConn) IrcClient {
 
 // TODO: make a new message type for output instead of []byte?
 // Output back to the IRC connection
-func (cli *client) Output() chan<- []byte {
+func (cli *client) Output() chan<- IrcMessage {
 	return cli.outputChan
 }
 
@@ -85,9 +91,16 @@ func logMessage(msg *parser.Message) {
 func (cli *client) setupOutput() {
 	go func() {
 		for output := range cli.outputChan {
-			fmt.Print("< ", string(output))
-			_, err := cli.conn.Write(output)
-			if err != nil {
+			bytes := output.Bytes()
+			fmt.Println("< ", string(bytes))
+			// Message
+			if _, err := cli.conn.Write(bytes); err != nil {
+				cli.errorChan <- err
+				continue
+			}
+
+			// CRLF
+			if _, err := cli.conn.Write(crlfBytes); err != nil {
 				cli.errorChan <- err
 			}
 		}

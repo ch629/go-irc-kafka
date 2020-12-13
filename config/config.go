@@ -12,16 +12,7 @@ func LoadConfig() {
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			// Config not found
-			viper.SetDefault("oauth.id", "")
-			viper.SetDefault("oauth.secret", "")
-
-			viper.SetDefault("bot.name", "")
-			// Use if not provided with oauth.id & secret?
-			viper.SetDefault("bot.oauth", "")
-			viper.SetDefault("bot.channels", []string{})
-
-			viper.SetDefault("kafka.brokers", []string{"localhost:9092"})
-			viper.SetDefault("kafka.topic", "")
+			setupDefaults()
 
 			if err = viper.WriteConfigAs("config.yaml"); err != nil {
 				panic(err)
@@ -30,4 +21,14 @@ func LoadConfig() {
 			panic(err)
 		}
 	}
+}
+
+func setupDefaults() {
+	viper.SetDefault("bot.name", "")
+	viper.SetDefault("bot.oauth", "")
+	viper.SetDefault("bot.channels", []string{})
+
+	viper.SetDefault("kafka.brokers", []string{"localhost:9092"})
+	viper.SetDefault("kafka.topic", "example-topic")
+
 }
