@@ -3,7 +3,7 @@ package irc
 import (
 	"encoding/json"
 	"fmt"
-	"go-irc/parser"
+	"go-irc/irc/parser"
 )
 
 var commandMap = map[string]func(message parser.Message){

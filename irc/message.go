@@ -1,8 +1,8 @@
 package irc
 
 import (
+	"go-irc/irc/parser"
 	"go-irc/kafka"
-	"go-irc/parser"
 	"strings"
 	"time"
 )
@@ -19,7 +19,6 @@ func initializeProducer() {
 	producer = p
 }
 
-// TODO: Do we want to split out the metadata a bit? Rather than storing in a map
 type ChannelMessage struct {
 	Timestamp time.Time         `json:"timestamp"`
 	Sender    string            `json:"sender"`

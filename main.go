@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"go-irc/config"
 	"go-irc/irc"
-	"go-irc/parser"
+	"go-irc/irc/parser"
 	"net"
 	"os"
 	"sync"

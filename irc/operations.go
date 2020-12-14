@@ -2,7 +2,7 @@ package irc
 
 import (
 	"fmt"
-	"go-irc/parser"
+	"go-irc/irc/parser"
 	pb "go-irc/proto"
 	"os"
 
@@ -94,7 +94,9 @@ func makeStruct(data map[string]string) *structpb.Struct {
 func Login() {
 	writeCommand("PASS oauth:%v", BaseBotConfig.OAuthToken)
 	writeCommand("NICK %s", BaseBotConfig.Name)
+	writeCommand("CAP REQ :twitch.tv/membership")
 	writeCommand("CAP REQ :twitch.tv/tags")
+	writeCommand("CAP REQ :twitch.tv/commands")
 }
 
 func checkError(err error) {

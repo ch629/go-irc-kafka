@@ -272,7 +272,9 @@ func (s *Scanner) readParamMiddle() (string, error) {
 			return sb.String(), nil
 		}
 
-		if r == ':' {
+		// TODO: Handle escaped
+		// Some twitch messages omit the ':' & just directly CRLF
+		if r == ':' || r == '\r' {
 			return sb.String(), nil
 		}
 		r = s.read()

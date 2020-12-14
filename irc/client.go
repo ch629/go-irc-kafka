@@ -3,16 +3,17 @@ package irc
 import (
 	"encoding/json"
 	"fmt"
-	"go-irc/parser"
+	"go-irc/irc/parser"
 	"net"
 )
 
 type (
-	// TODO: Close (when closed, input/output need stopping)
 	IrcClient interface {
 		Input() <-chan parser.Message
 		Output() chan<- IrcMessage
 		Errors() <-chan error
+		Close()
+		Closed() bool
 	}
 
 	IrcMessage interface {
@@ -24,6 +25,7 @@ type (
 		inputChan  chan parser.Message
 		outputChan chan IrcMessage
 		errorChan  chan error
+		closed     bool
 	}
 )
 
@@ -45,7 +47,6 @@ func NewDefaultClient(conn *net.TCPConn) IrcClient {
 	return cli
 }
 
-// TODO: make a new message type for output instead of []byte?
 // Output back to the IRC connection
 func (cli *client) Output() chan<- IrcMessage {
 	return cli.outputChan
@@ -62,11 +63,20 @@ func (cli *client) Errors() <-chan error {
 	return cli.errorChan
 }
 
+func (cli *client) Close() {
+	cli.closed = true
+}
+
+func (cli *client) Closed() bool {
+	return cli.closed
+}
+
+// TODO: Should we make the close work with a channel, similar to interupt signals?
 func (cli *client) readInput() {
 	scanner := parser.NewScanner(cli.conn)
 
 	go func() {
-		for {
+		for !cli.Closed() {
 			message, err := scanner.Scan()
 
 			if err != nil {
@@ -91,6 +101,9 @@ func logMessage(msg *parser.Message) {
 func (cli *client) setupOutput() {
 	go func() {
 		for output := range cli.outputChan {
+			if cli.Closed() {
+				return
+			}
 			bytes := output.Bytes()
 			fmt.Println("< ", string(bytes))
 			// Message

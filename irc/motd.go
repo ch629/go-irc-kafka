@@ -2,7 +2,7 @@ package irc
 
 import (
 	"fmt"
-	"go-irc/parser"
+	"go-irc/irc/parser"
 	"strings"
 )
 
