@@ -1,7 +1,8 @@
-package irc
+package operations
 
 import (
 	"fmt"
+	"go-irc/irc"
 	"go-irc/irc/parser"
 	pb "go-irc/proto"
 	"os"
@@ -30,15 +31,15 @@ func (message *stringMessage) Bytes() []byte {
 	return []byte(message.String)
 }
 
-var output = make(chan IrcMessage)
+var output = make(chan irc.IrcMessage)
 
-func OutputStream(client IrcClient) {
+func OutputStream(client irc.IrcClient) {
 	for message := range output {
 		client.Output() <- message
 	}
 }
 
-func Write(message IrcMessage) {
+func Write(message irc.IrcMessage) {
 	output <- message
 }
 
@@ -92,8 +93,8 @@ func makeStruct(data map[string]string) *structpb.Struct {
 }
 
 func Login() {
-	writeCommand("PASS oauth:%v", BaseBotConfig.OAuthToken)
-	writeCommand("NICK %s", BaseBotConfig.Name)
+	writeCommand("PASS oauth:%v", irc.BaseBotConfig.OAuthToken)
+	writeCommand("NICK %s", irc.BaseBotConfig.Name)
 	writeCommand("CAP REQ :twitch.tv/membership")
 	writeCommand("CAP REQ :twitch.tv/tags")
 	writeCommand("CAP REQ :twitch.tv/commands")
@@ -107,7 +108,7 @@ func checkError(err error) {
 }
 
 func handleWelcome(_ parser.Message) {
-	for _, channel := range BaseBotConfig.Channels {
+	for _, channel := range irc.BaseBotConfig.Channels {
 		joinChannel(channel)
 	}
 }

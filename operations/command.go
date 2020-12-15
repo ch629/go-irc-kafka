@@ -1,4 +1,4 @@
-package irc
+package operations
 
 import (
 	"encoding/json"

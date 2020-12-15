@@ -5,6 +5,7 @@ import (
 	"go-irc/config"
 	"go-irc/irc"
 	"go-irc/irc/parser"
+	"go-irc/operations"
 	"net"
 	"os"
 	"sync"
@@ -22,7 +23,7 @@ func main() {
 	irc.InitializeConfig()
 
 	// Reads entire message objects created by the parser
-	go irc.ReadInput()
+	go operations.ReadInput()
 
 	// Connect to IRC
 	// For some reason bringing this into a method blocks everything...?
@@ -30,6 +31,8 @@ func main() {
 	checkError(err)
 	conn, err := net.DialTCP("tcp", nil, tcpAddr)
 	checkError(err)
+
+	defer conn.Close()
 
 	ircClient := irc.NewDefaultClient(conn)
 
@@ -48,9 +51,9 @@ func main() {
 	}()
 
 	// Setup output back to IRC
-	go irc.OutputStream(ircClient)
+	go operations.OutputStream(ircClient)
 
-	irc.Login()
+	operations.Login()
 
 	wg.Wait()
 }

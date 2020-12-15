@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go-irc/irc/parser"
-	"net"
+	"io"
 )
 
 type (
@@ -21,7 +21,7 @@ type (
 	}
 
 	client struct {
-		conn       *net.TCPConn
+		conn       io.ReadWriter
 		inputChan  chan parser.Message
 		outputChan chan IrcMessage
 		errorChan  chan error
@@ -31,7 +31,7 @@ type (
 
 var crlfBytes = []byte{'\r', '\n'}
 
-func NewDefaultClient(conn *net.TCPConn) IrcClient {
+func NewDefaultClient(conn io.ReadWriter) IrcClient {
 	// TODO: Buffer on the channels?
 	errorChan := make(chan error)
 	cli := &client{
@@ -52,7 +52,6 @@ func (cli *client) Output() chan<- IrcMessage {
 	return cli.outputChan
 }
 
-// TODO: Should this be <-chan *parser.Message?
 // Input from the IRC connection
 func (cli *client) Input() <-chan parser.Message {
 	return cli.inputChan
@@ -71,16 +70,16 @@ func (cli *client) Closed() bool {
 	return cli.closed
 }
 
-// TODO: Should we make the close work with a channel, similar to interupt signals?
+// Scans the IRC messages and writes them to the input channel
 func (cli *client) readInput() {
 	scanner := parser.NewScanner(cli.conn)
 
 	go func() {
+		// TODO: Use a close channel so the scan doesn't block the close
 		for !cli.Closed() {
 			message, err := scanner.Scan()
 
 			if err != nil {
-				// TODO: Make this non-blocking
 				cli.errorChan <- err
 				continue
 			}
@@ -98,6 +97,7 @@ func logMessage(msg *parser.Message) {
 	fmt.Println(">", string(bytes))
 }
 
+// Writes each message from the channel to the IRC Connection
 func (cli *client) setupOutput() {
 	go func() {
 		for output := range cli.outputChan {

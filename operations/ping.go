@@ -1,4 +1,4 @@
-package irc
+package operations
 
 import "go-irc/irc/parser"
 
