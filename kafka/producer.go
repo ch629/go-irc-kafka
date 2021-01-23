@@ -10,8 +10,10 @@ import (
 
 type Producer struct {
 	sarama.AsyncProducer
+	topic string
 }
 
+// TODO: Closer?
 func NewDefaultProducer() (*Producer, error) {
 	config := sarama.NewConfig()
 	brokers := viper.GetStringSlice("kafka.brokers")
@@ -23,13 +25,14 @@ func NewDefaultProducer() (*Producer, error) {
 
 	return &Producer{
 		AsyncProducer: pro,
+		topic:         viper.GetString("kafka.topic"),
 	}, nil
 }
 
 func (producer *Producer) WriteChatMessage(message *pb.ChatMessage) {
-	topic := viper.GetString("kafka.topic")
 	producer.Input() <- &sarama.ProducerMessage{
-		Topic: topic,
+		Topic: producer.topic,
+		Key:   sarama.StringEncoder(message.Channel),
 		Value: ProtoEncoder{message},
 	}
 }

@@ -2,65 +2,38 @@ package operations
 
 import (
 	"fmt"
-	"go-irc/irc"
+	"go-irc/irc/client"
 	"go-irc/irc/parser"
 	pb "go-irc/proto"
+	"go-irc/twitch"
 	"os"
 
 	"github.com/golang/protobuf/ptypes"
 	structpb "github.com/golang/protobuf/ptypes/struct"
 )
 
-type (
-	// TODO: Better way of handling these (More customizable messages based on RFC 1459)
-	channelMessage struct {
-		Command string
-		Channel string
-	}
+var output = make(chan client.IrcMessage)
 
-	stringMessage struct {
-		String string
-	}
-)
-
-func (message *channelMessage) Bytes() []byte {
-	return []byte(fmt.Sprintf("%v #%v", message.Command, message.Channel))
-}
-
-func (message *stringMessage) Bytes() []byte {
-	return []byte(message.String)
-}
-
-var output = make(chan irc.IrcMessage)
-
-func OutputStream(client irc.IrcClient) {
+func OutputStream(client client.IrcClient) {
 	for message := range output {
 		client.Output() <- message
 	}
 }
 
-func Write(message irc.IrcMessage) {
+func Write(message client.IrcMessage) {
 	output <- message
 }
 
 func joinChannel(channel string) {
-	Write(&channelMessage{
-		Command: "JOIN",
-		Channel: channel,
-	})
+	Write(twitch.MakeJoinCommand(channel))
 }
 
 func leaveChannel(channel string) {
-	Write(&channelMessage{
-		Command: "PART",
-		Channel: channel,
-	})
+	Write(twitch.MakePartCommand(channel))
 }
 
-func writeCommand(command string, a ...interface{}) {
-	Write(&stringMessage{
-		String: fmt.Sprintf(command, a...),
-	})
+func requestCapability(cap twitch.Capability) {
+	Write(twitch.MakeCapabilityRequest(cap))
 }
 
 func makeProtoMessage(message *ChannelMessage) *pb.ChatMessage {
@@ -93,11 +66,10 @@ func makeStruct(data map[string]string) *structpb.Struct {
 }
 
 func Login() {
-	writeCommand("PASS oauth:%v", irc.BaseBotConfig.OAuthToken)
-	writeCommand("NICK %s", irc.BaseBotConfig.Name)
-	writeCommand("CAP REQ :twitch.tv/membership")
-	writeCommand("CAP REQ :twitch.tv/tags")
-	writeCommand("CAP REQ :twitch.tv/commands")
+	Write(twitch.MakePassCommand(client.BaseBotConfig.OAuthToken))
+	Write(twitch.MakeNickCommand(client.BaseBotConfig.Name))
+	requestCapability(twitch.TAGS)
+	requestCapability(twitch.COMMANDS)
 }
 
 func checkError(err error) {
@@ -108,7 +80,7 @@ func checkError(err error) {
 }
 
 func handleWelcome(_ parser.Message) {
-	for _, channel := range irc.BaseBotConfig.Channels {
+	for _, channel := range client.BaseBotConfig.Channels {
 		joinChannel(channel)
 	}
 }

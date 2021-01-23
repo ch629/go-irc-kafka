@@ -7,18 +7,6 @@ import (
 	"time"
 )
 
-var producer *kafka.Producer
-
-func initializeProducer() {
-	p, err := kafka.NewDefaultProducer()
-
-	if err != nil {
-		panic(err)
-	}
-
-	producer = p
-}
-
 type ChannelMessage struct {
 	Timestamp time.Time         `json:"timestamp"`
 	Sender    string            `json:"sender"`
@@ -27,19 +15,17 @@ type ChannelMessage struct {
 	Metadata  map[string]string `json:"metadata"`
 }
 
-func handleMessage(message parser.Message) {
-	user := strings.Split(message.Prefix, "!")[0]
-	mes := &ChannelMessage{
-		Timestamp: time.Now(),
-		Sender:    user,
-		Channel:   message.Params[0][1:],
-		Message:   message.Params[1],
-		Metadata:  message.Tags,
-	}
+func handleMessage(producer kafka.Producer) func(parser.Message) {
+	return func(message parser.Message) {
+		user := strings.Split(message.Prefix, "!")[0]
+		mes := &ChannelMessage{
+			Timestamp: time.Now(),
+			Sender:    user,
+			Channel:   message.Params[0][1:],
+			Message:   message.Params[1],
+			Metadata:  message.Tags,
+		}
 
-	if producer == nil {
-		initializeProducer()
+		producer.WriteChatMessage(makeProtoMessage(mes))
 	}
-
-	go producer.WriteChatMessage(makeProtoMessage(mes))
 }

@@ -1,4 +1,4 @@
-package irc
+package client
 
 import (
 	"encoding/json"
@@ -32,7 +32,6 @@ type (
 var crlfBytes = []byte{'\r', '\n'}
 
 func NewDefaultClient(conn io.ReadWriter) IrcClient {
-	// TODO: Buffer on the channels?
 	errorChan := make(chan error)
 	cli := &client{
 		conn:       conn,
@@ -93,12 +92,15 @@ func (cli *client) readInput() {
 
 // For testing
 func logMessage(msg *parser.Message) {
-	bytes, _ := json.MarshalIndent(msg, "", "  ")
-	fmt.Println(">", string(bytes))
+	if msg.Command != "PRIVMSG" {
+		bytes, _ := json.MarshalIndent(msg, "", "  ")
+		fmt.Println(">", string(bytes))
+	}
 }
 
 // Writes each message from the channel to the IRC Connection
 func (cli *client) setupOutput() {
+	// TODO: Rate limit per output type
 	go func() {
 		for output := range cli.outputChan {
 			if cli.Closed() {

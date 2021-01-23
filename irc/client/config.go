@@ -1,6 +1,9 @@
-package irc
+package client
 
-import "github.com/spf13/viper"
+import (
+	"github.com/spf13/viper"
+	"strings"
+)
 
 var BaseBotConfig BotConfig
 
@@ -14,7 +17,7 @@ type BotConfig struct {
 func InitializeConfig() {
 	BaseBotConfig = BotConfig{
 		Name:       viper.GetString("bot.name"),
-		OAuthToken: viper.GetString("bot.oauth"),
+		OAuthToken: strings.TrimPrefix(viper.GetString("bot.oauth"), "oauth:"),
 		Address:    "irc.chat.twitch.tv:6667",
 		Channels:   viper.GetStringSlice("bot.channels"),
 	}

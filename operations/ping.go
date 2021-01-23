@@ -1,7 +1,10 @@
 package operations
 
-import "go-irc/irc/parser"
+import (
+	"go-irc/irc/parser"
+	"go-irc/twitch"
+)
 
 func handlePing(message parser.Message) {
-	writeCommand("PONG :%v", message.Params[0])
+	Write(twitch.MakePongCommand(message.Params[0]))
 }

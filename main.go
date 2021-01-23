@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"go-irc/config"
-	"go-irc/irc"
+	"go-irc/irc/client"
 	"go-irc/irc/parser"
 	"go-irc/operations"
 	"net"
@@ -20,21 +20,21 @@ func main() {
 	wg.Add(1)
 	config.LoadConfig()
 
-	irc.InitializeConfig()
+	client.InitializeConfig()
 
 	// Reads entire message objects created by the parser
-	go operations.ReadInput()
+	operations.ReadInput()
 
 	// Connect to IRC
 	// For some reason bringing this into a method blocks everything...?
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", irc.BaseBotConfig.Address)
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", client.BaseBotConfig.Address)
 	checkError(err)
 	conn, err := net.DialTCP("tcp", nil, tcpAddr)
 	checkError(err)
 
 	defer conn.Close()
 
-	ircClient := irc.NewDefaultClient(conn)
+	ircClient := client.NewDefaultClient(conn)
 
 	// Take output from the irc parser & send to handlers
 	go func() {
