@@ -1,9 +1,8 @@
 package client
 
 import (
-	"encoding/json"
-	"fmt"
 	"go-irc/irc/parser"
+	"go-irc/logging"
 	"io"
 )
 
@@ -92,14 +91,13 @@ func (cli *client) readInput() {
 
 // For testing
 func logMessage(msg *parser.Message) {
-	if msg.Command != "PRIVMSG" {
-		bytes, _ := json.MarshalIndent(msg, "", "  ")
-		fmt.Println(">", string(bytes))
-	}
+	log := logging.Logger()
+	log.Infow("Received", "message", msg)
 }
 
 // Writes each message from the channel to the IRC Connection
 func (cli *client) setupOutput() {
+	log := logging.Logger()
 	// TODO: Rate limit per output type
 	go func() {
 		for output := range cli.outputChan {
@@ -107,7 +105,7 @@ func (cli *client) setupOutput() {
 				return
 			}
 			bytes := output.Bytes()
-			fmt.Println("< ", string(bytes))
+			log.Infow("Output", "message", string(bytes))
 			// Message
 			if _, err := cli.conn.Write(bytes); err != nil {
 				cli.errorChan <- err

@@ -1,12 +1,13 @@
 package operations
 
 import (
-	"fmt"
 	"go-irc/irc/parser"
-	"os"
+	"go-irc/logging"
 )
 
 func handleErrorMessage(message parser.Message) {
+	log := logging.Logger()
+
 	// TODO: Format the message?
-	fmt.Fprintf(os.Stderr, "Received error from IRC: %v\n", message)
+	log.Errorw("Received error from IRC", "message", message)
 }

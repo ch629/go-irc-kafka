@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go-irc/irc/client"
 	"go-irc/irc/parser"
+	"go-irc/logging"
 	"strings"
 )
 
@@ -15,6 +16,7 @@ func handleMotd(message parser.Message) {
 }
 
 func handleMotdEnd(_ parser.Message) {
-	fmt.Println(motd.String())
+	log := logging.Logger()
+	log.Infow("MOTD", "message", motd.String())
 	motd.Reset()
 }

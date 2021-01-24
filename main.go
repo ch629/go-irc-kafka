@@ -5,6 +5,7 @@ import (
 	"go-irc/config"
 	"go-irc/irc/client"
 	"go-irc/irc/parser"
+	"go-irc/logging"
 	"go-irc/operations"
 	"net"
 	"os"
@@ -15,6 +16,7 @@ import (
 
 // TODO: Maybe add a rest endpoint to join/leave a channel or use a kafka topic with commands to handle from external sources
 func main() {
+	log := logging.Logger()
 	// TODO: Handle this WaitGroup better
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -46,7 +48,7 @@ func main() {
 	// Handle errors from irc parsing
 	go func() {
 		for err := range ircClient.Errors() {
-			fmt.Fprintln(os.Stderr, "error from irc client,", err)
+			log.Errorw("error from irc client", "error", err)
 		}
 	}()
 

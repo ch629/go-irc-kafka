@@ -1,10 +1,11 @@
 package operations
 
 import (
-	"encoding/json"
-	"fmt"
 	"go-irc/irc/parser"
+	"go-irc/logging"
 )
+
+var log = logging.Logger()
 
 var commandMap = map[string]func(message parser.Message){
 	"001":     handleWelcome,
@@ -16,19 +17,19 @@ var commandMap = map[string]func(message parser.Message){
 	"353": func(message parser.Message) {
 		// RPL_NAMREPLY
 		//  <channel> :[[@|+]<nick> [[@|+]<nick> [...]]]
-		fmt.Println("Got users: ", message.Params)
+		log.Infow("Received users", "users", message.Params)
 	},
 	"366": func(message parser.Message) {
 		// RPL_ENDOFNAMES
 		// <channel> :End of /NAMES list
-		fmt.Println("End of names list")
+		log.Info("End of names list")
 	},
 	"JOIN": func(message parser.Message) {
 		// Joined channel
-		fmt.Println("Joined channel: ", message.Params)
+		log.Infow("Joined channel", "channel", message.Params)
 	},
 	"421": func(message parser.Message) {
-		fmt.Println("Invalid command: ", message.Params)
+		log.Warnw("Invalid command", "command", message.Params)
 	},
 }
 
@@ -47,8 +48,7 @@ func ReadInput() {
 				go f(message)
 			} else {
 				// Print out message if not known
-				bytes, _ := json.Marshal(message)
-				fmt.Printf("Message: %v\n", string(bytes))
+				log.Infow("Received unknown message", "command", message.Command, "message", message)
 			}
 		}
 	}()

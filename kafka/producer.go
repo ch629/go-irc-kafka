@@ -8,13 +8,18 @@ import (
 	"github.com/spf13/viper"
 )
 
-type Producer struct {
+type Producer interface {
+	sarama.AsyncProducer
+	WriteChatMessage(message *pb.ChatMessage)
+	Close() error
+}
+
+type producer struct {
 	sarama.AsyncProducer
 	topic string
 }
 
-// TODO: Closer?
-func NewDefaultProducer() (*Producer, error) {
+func NewDefaultProducer() (Producer, error) {
 	config := sarama.NewConfig()
 	brokers := viper.GetStringSlice("kafka.brokers")
 
@@ -23,13 +28,13 @@ func NewDefaultProducer() (*Producer, error) {
 		return nil, fmt.Errorf("failed to create async kafka producer due to %w", err)
 	}
 
-	return &Producer{
+	return &producer{
 		AsyncProducer: pro,
 		topic:         viper.GetString("kafka.topic"),
 	}, nil
 }
 
-func (producer *Producer) WriteChatMessage(message *pb.ChatMessage) {
+func (producer *producer) WriteChatMessage(message *pb.ChatMessage) {
 	producer.Input() <- &sarama.ProducerMessage{
 		Topic: producer.topic,
 		Key:   sarama.StringEncoder(message.Channel),

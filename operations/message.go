@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-var producer *kafka.Producer
+var producer kafka.Producer
 
 func initializeProducer() {
 	pro, err := kafka.NewDefaultProducer()
