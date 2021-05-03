@@ -30,16 +30,9 @@ type ChannelMessage struct {
 	Metadata  map[string]string `json:"metadata"`
 }
 
-// TODO: Temp until message handling rewrite
-var con config.Kafka
-
-func InitConfig(kafkaConfig config.Kafka) {
-	con = kafkaConfig
-}
-
 func handleMessage(message parser.Message) {
 	producerInit.Do(func() {
-		initializeProducer(con)
+		initializeProducer(kafkaConfig)
 	})
 
 	user := strings.Split(message.Prefix, "!")[0]

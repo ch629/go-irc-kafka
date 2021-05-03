@@ -48,7 +48,7 @@ func ReadInput() {
 				go f(message)
 			} else {
 				// Print out message if not known
-				log.Infow("Received unknown message", "command", message.Command, "message", message)
+				log.Warnw("Received unknown message", "command", message.Command, "message", message)
 			}
 		}
 	}()

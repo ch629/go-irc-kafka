@@ -135,6 +135,9 @@ func (cli *client) readInput() {
 		select {
 		case <-cli.ctx.Done():
 			return
+		// TODO: Sometimes we just endlessly get an empty message:
+		//  client/client.go:160	  Received	                {"message": {"Tags":null,"Prefix":"","Command":"","Params":null}}
+		//  operations/command.go:51  Received unknown message	{"command": "", "message": {"Tags":null,"Prefix":"","Command":"","Params":null}}
 		case message := <-cli.Scan():
 			cli.logMessage(message)
 			cli.inputChan <- message

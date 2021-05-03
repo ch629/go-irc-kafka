@@ -12,6 +12,7 @@ type (
 	Config struct {
 		Bot   Bot
 		Kafka Kafka
+		Irc   Irc
 	}
 	Bot struct {
 		Name     string
@@ -21,6 +22,9 @@ type (
 	Kafka struct {
 		Brokers []string
 		Topic   string
+	}
+	Irc struct {
+		Address string
 	}
 )
 
@@ -34,6 +38,9 @@ var (
 		Kafka: Kafka{
 			Brokers: []string{"localhost:9092"},
 			Topic:   "",
+		},
+		Irc: Irc{
+			Address: "irc.chat.twitch.tv:6667",
 		},
 	}
 

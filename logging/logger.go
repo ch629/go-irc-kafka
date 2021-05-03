@@ -1,11 +1,13 @@
 package logging
 
-import "go.uber.org/zap"
+import (
+	"go.uber.org/zap"
+)
 
 var logger zap.SugaredLogger
 
 func init() {
-	log, err := zap.NewProduction()
+	log, err := zap.NewDevelopment()
 
 	if err != nil {
 		panic(err)
