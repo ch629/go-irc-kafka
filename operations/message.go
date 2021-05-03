@@ -1,16 +1,19 @@
 package operations
 
 import (
-	"go-irc/irc/parser"
-	"go-irc/kafka"
+	"github.com/ch629/go-irc-kafka/config"
+	"github.com/ch629/go-irc-kafka/irc/parser"
+	"github.com/ch629/go-irc-kafka/kafka"
 	"strings"
+	"sync"
 	"time"
 )
 
 var producer kafka.Producer
+var producerInit sync.Once
 
-func initializeProducer() {
-	pro, err := kafka.NewDefaultProducer()
+func initializeProducer(kafkaConfig config.Kafka) {
+	pro, err := kafka.NewDefaultProducer(kafkaConfig)
 
 	if err != nil {
 		panic(err)
@@ -27,10 +30,17 @@ type ChannelMessage struct {
 	Metadata  map[string]string `json:"metadata"`
 }
 
+// TODO: Temp until message handling rewrite
+var con config.Kafka
+
+func InitConfig(kafkaConfig config.Kafka) {
+	con = kafkaConfig
+}
+
 func handleMessage(message parser.Message) {
-	if producer == nil {
-		initializeProducer()
-	}
+	producerInit.Do(func() {
+		initializeProducer(con)
+	})
 
 	user := strings.Split(message.Prefix, "!")[0]
 	mes := &ChannelMessage{
@@ -41,5 +51,5 @@ func handleMessage(message parser.Message) {
 		Metadata:  message.Tags,
 	}
 
-	producer.WriteChatMessage(makeProtoMessage(mes))
+	producer.Send(makeProtoMessage(mes))
 }

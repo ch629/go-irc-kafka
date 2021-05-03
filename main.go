@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"go-irc/config"
-	"go-irc/irc/client"
-	"go-irc/irc/parser"
-	"go-irc/logging"
-	"go-irc/operations"
+	"github.com/ch629/go-irc-kafka/config"
+	"github.com/ch629/go-irc-kafka/irc/client"
+	"github.com/ch629/go-irc-kafka/irc/parser"
+	"github.com/ch629/go-irc-kafka/logging"
+	"github.com/ch629/go-irc-kafka/operations"
+	"github.com/spf13/afero"
 	"net"
 	"os"
 	"sync"
@@ -16,13 +17,18 @@ import (
 
 // TODO: Maybe add a rest endpoint to join/leave a channel or use a kafka topic with commands to handle from external sources
 func main() {
+	fs := afero.NewOsFs()
+	con, err := config.LoadConfig(fs)
+	if err != nil {
+		panic(err)
+	}
+
 	log := logging.Logger()
 	// TODO: Handle this WaitGroup better
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	config.LoadConfig()
-
-	client.InitializeConfig()
+	client.InitializeConfig(con.Bot)
+	operations.InitConfig(con.Kafka)
 
 	// Reads entire message objects created by the parser
 	operations.ReadInput()

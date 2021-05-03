@@ -2,7 +2,7 @@ package client
 
 import (
 	"bytes"
-	"go-irc/irc/parser"
+	"github.com/ch629/go-irc-kafka/irc/parser"
 	"testing"
 	"time"
 

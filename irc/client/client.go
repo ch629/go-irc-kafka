@@ -1,8 +1,8 @@
 package client
 
 import (
-	"go-irc/irc/parser"
-	"go-irc/logging"
+	"github.com/ch629/go-irc-kafka/irc/parser"
+	"github.com/ch629/go-irc-kafka/logging"
 	"io"
 )
 

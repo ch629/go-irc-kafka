@@ -1,7 +1,7 @@
 package client
 
 import (
-	"github.com/spf13/viper"
+	"github.com/ch629/go-irc-kafka/config"
 	"strings"
 )
 
@@ -14,11 +14,11 @@ type BotConfig struct {
 	Channels   []string
 }
 
-func InitializeConfig() {
+func InitializeConfig(config config.Bot) {
 	BaseBotConfig = BotConfig{
-		Name:       viper.GetString("bot.name"),
-		OAuthToken: strings.TrimPrefix(viper.GetString("bot.oauth"), "oauth:"),
+		Name:       config.Name,
+		OAuthToken: strings.TrimPrefix(config.OAuth, "oauth:"),
 		Address:    "irc.chat.twitch.tv:6667",
-		Channels:   viper.GetStringSlice("bot.channels"),
+		Channels:   config.Channels,
 	}
 }

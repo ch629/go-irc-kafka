@@ -2,9 +2,9 @@ package operations
 
 import (
 	"fmt"
-	"go-irc/irc/client"
-	"go-irc/irc/parser"
-	"go-irc/logging"
+	"github.com/ch629/go-irc-kafka/irc/client"
+	"github.com/ch629/go-irc-kafka/irc/parser"
+	"github.com/ch629/go-irc-kafka/logging"
 	"strings"
 )
 

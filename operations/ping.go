@@ -1,8 +1,8 @@
 package operations
 
 import (
-	"go-irc/irc/parser"
-	"go-irc/twitch"
+	"github.com/ch629/go-irc-kafka/irc/parser"
+	"github.com/ch629/go-irc-kafka/twitch"
 )
 
 func handlePing(message parser.Message) {

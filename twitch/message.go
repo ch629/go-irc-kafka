@@ -2,7 +2,7 @@ package twitch
 
 import (
 	"fmt"
-	"go-irc/irc/client"
+	"github.com/ch629/go-irc-kafka/irc/client"
 )
 
 type MessageCommand struct {

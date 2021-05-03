@@ -1,8 +1,8 @@
 package operations
 
 import (
-	"go-irc/irc/parser"
-	"go-irc/logging"
+	"github.com/ch629/go-irc-kafka/irc/parser"
+	"github.com/ch629/go-irc-kafka/logging"
 )
 
 var log = logging.Logger()

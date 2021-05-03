@@ -2,10 +2,10 @@ package operations
 
 import (
 	"fmt"
-	"go-irc/irc/client"
-	"go-irc/irc/parser"
-	pb "go-irc/proto"
-	"go-irc/twitch"
+	"github.com/ch629/go-irc-kafka/irc/client"
+	"github.com/ch629/go-irc-kafka/irc/parser"
+	pb "github.com/ch629/go-irc-kafka/proto"
+	"github.com/ch629/go-irc-kafka/twitch"
 	"os"
 
 	"github.com/golang/protobuf/ptypes"
