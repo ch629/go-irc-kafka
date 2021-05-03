@@ -9,11 +9,17 @@ import (
 	"unicode/utf8"
 )
 
+// maxMessageLength is the maximum amount of runes to read before returning an error
+const maxMessageLength = 512
+
 var (
 	eof = rune(0)
 
 	ErrReadingRune  = errors.New("error reading rune")
 	ErrEmptyMessage = errors.New("empty message")
+	ErrNoCommand    = errors.New("no command")
+	ErrNoPrefix     = errors.New("no prefix")
+	ErrTooLong      = errors.New("read for too long")
 )
 
 // https://ircv3.net/specs/extensions/message-tags.html
@@ -47,6 +53,7 @@ func NewScanner(r io.Reader) *Scanner {
 
 // TODO: EOF checks
 // TODO: Escape inside of other funcs
+// TODO: Maximum length check, currently we do a check in readUntil, but there is a maximum of 512 chars in an entire message including CRLF
 // Scan scans a line from the reader
 func (s *Scanner) Scan() (*Message, error) {
 	if s.isCrlf() {
@@ -64,8 +71,8 @@ func (s *Scanner) Scan() (*Message, error) {
 	}
 
 	message := &Message{
-		Tags:   map[string]string{},
-		Params: []string{},
+		Tags:   make(map[string]string),
+		Params: make([]string, 0),
 	}
 
 	if r == '@' {
@@ -166,37 +173,32 @@ func (s *Scanner) readTags() (map[string]string, error) {
 		} else {
 			valueBuilder.WriteRune(r)
 		}
-
 	}
 }
 
 // TODO: Prefix struct?
 // readPrefix Reads the prefix BNF
 func (s *Scanner) readPrefix() (string, error) {
-	var sb strings.Builder
-	for {
-		r := s.read()
-
-		if r == ' ' {
-			return sb.String(), nil
-		}
-
-		sb.WriteRune(r)
+	str, err := s.readUntil([]rune{' '}, []rune{})
+	if err != nil {
+		return "", err
 	}
+	if len(str) == 0 {
+		return "", ErrNoPrefix
+	}
+	return str, nil
 }
 
 // readCommand Reads the command BNF
 func (s *Scanner) readCommand() (string, error) {
-	var sb strings.Builder
-	for {
-		r := s.read()
-
-		if r == ' ' {
-			return sb.String(), nil
-		}
-
-		sb.WriteRune(r)
+	str, err := s.readUntil([]rune{' '}, []rune{})
+	if err != nil {
+		return "", err
 	}
+	if len(str) == 0 {
+		return "", ErrNoCommand
+	}
+	return str, nil
 }
 
 // readParams Reads the param BNF
@@ -258,28 +260,40 @@ func (s *Scanner) readParamTrailing() (string, error) {
 
 // readParamMiddle Reads the param middle BNF
 func (s *Scanner) readParamMiddle() (string, error) {
-	var sb strings.Builder
-	for {
-		r, err := s.peekRune()
+	return s.readUntil([]rune{' '}, []rune{':', '\r'})
+}
 
-		if err != nil {
-			return "", fmt.Errorf("failed to peek rune due to %w", err)
+// readUntil reads runes up until is is either in the untilInclusive slice or untilExclusive
+// untilInclusive will consume the rune if it is found
+// untilExclusive will not consume the rune if it is found
+// returns ErrTooLong if too many runes have been read
+func (s *Scanner) readUntil(untilInclusive []rune, untilExclusive []rune) (string, error) {
+	var contains = func(runes []rune, r rune) bool {
+		for _, u := range runes {
+			if r == u {
+				return true
+			}
 		}
+		return false
+	}
 
-		if r == ' ' {
-			// Consume ' '
+	var sb strings.Builder
+
+	for i := 0; i < maxMessageLength; i++ {
+		r, err := s.peekRune()
+		if err != nil {
+			return "", err
+		}
+		if contains(untilInclusive, r) {
 			s.consume()
 			return sb.String(), nil
 		}
-
-		// TODO: Handle escaped
-		// Some twitch messages omit the ':' & just directly CRLF
-		if r == ':' || r == '\r' {
+		if contains(untilExclusive, r) {
 			return sb.String(), nil
 		}
-		r = s.read()
-		sb.WriteRune(r)
+		sb.WriteRune(s.read())
 	}
+	return "", ErrTooLong
 }
 
 // read Reads and consumes a single rune from the Scanner

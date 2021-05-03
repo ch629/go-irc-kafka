@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"io"
 	"strings"
 	"testing"
 
@@ -110,4 +111,12 @@ func Test_ScanFullInput(t *testing.T) {
 			"Wow 8 months loeyaH our baby is almost here loeyaHM can we name him Zlatan ? Thanks Queen for always starting off my day on a good note with your wonderful content loeya1",
 		},
 	}, msg)
+}
+
+func TestScanner_Scan_Empty(t *testing.T) {
+	reader := strings.NewReader("")
+	scanner := NewScanner(reader)
+	msg, err := scanner.Scan()
+	assert.ErrorIs(t, err, io.EOF)
+	assert.Nil(t, msg)
 }
