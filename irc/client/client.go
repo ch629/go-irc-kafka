@@ -1,18 +1,29 @@
 package client
 
 import (
+	"context"
+	"errors"
 	"github.com/ch629/go-irc-kafka/irc/parser"
 	"github.com/ch629/go-irc-kafka/logging"
+	"go.uber.org/zap"
 	"io"
+	"sync"
 )
 
 type (
 	IrcClient interface {
+		// Input is a channel of messages coming from IRC
 		Input() <-chan parser.Message
+		// Output is a channel of messages to send to IRC
 		Output() chan<- IrcMessage
+		// Errors is a channel of errors generated when reading or writing to IRC
 		Errors() <-chan error
+		// Close closes the client connections
 		Close()
+		// Closed is whether the client connection is closed
 		Closed() bool
+		// Done is a channel to notify consumers when the client is done closing
+		Done() <-chan struct{}
 	}
 
 	IrcMessage interface {
@@ -20,29 +31,54 @@ type (
 	}
 
 	client struct {
-		conn       io.ReadWriter
+		ctx        context.Context
+		cancelFunc context.CancelFunc
+		conn       io.ReadWriteCloser
 		inputChan  chan parser.Message
 		outputChan chan IrcMessage
 		errorChan  chan error
-		closed     bool
+		log        zap.SugaredLogger
+		scanner    parser.Scanner
+		wg         sync.WaitGroup
+		done       chan struct{}
 	}
 )
 
 var crlfBytes = []byte{'\r', '\n'}
 
-func NewDefaultClient(conn io.ReadWriter) IrcClient {
-	errorChan := make(chan error)
+func NewDefaultClient(ctx context.Context, conn io.ReadWriteCloser) IrcClient {
 	cli := &client{
 		conn:       conn,
 		inputChan:  make(chan parser.Message),
 		outputChan: make(chan IrcMessage),
-		errorChan:  errorChan,
+		errorChan:  make(chan error),
+		done:       make(chan struct{}),
+		log:        logging.Logger(),
+		scanner:    *parser.NewScanner(conn),
 	}
+	cli.ctx, cli.cancelFunc = context.WithCancel(ctx)
 
-	cli.setupOutput()
-	cli.readInput()
+	cli.wg.Add(2)
+	go cli.cleanup()
+	go cli.setupOutput()
+	go cli.readInput()
 
 	return cli
+}
+
+func (cli *client) Done() <-chan struct{} {
+	return cli.done
+}
+
+// cleanup closes all channels once goroutines are finished
+func (cli *client) cleanup() {
+	cli.wg.Wait()
+	cli.log.Info("closing client channels")
+	close(cli.inputChan)
+	close(cli.outputChan)
+	close(cli.errorChan)
+	cli.conn.Close()
+	close(cli.done)
 }
 
 // Output back to the IRC connection
@@ -60,62 +96,99 @@ func (cli *client) Errors() <-chan error {
 	return cli.errorChan
 }
 
+// Close closes the connection & cancels goroutines
 func (cli *client) Close() {
-	cli.closed = true
+	cli.cancelFunc()
 }
 
 func (cli *client) Closed() bool {
-	return cli.closed
+	select {
+	case <-cli.ctx.Done():
+		return true
+	default:
+		return false
+	}
+}
+
+func (cli *client) Scan() <-chan parser.Message {
+	msgChan := make(chan parser.Message)
+	go func() {
+		defer close(msgChan)
+		message, err := cli.scanner.Scan()
+		if err != nil {
+			// Connection closed
+			if errors.Is(err, io.EOF) {
+				return
+			}
+			cli.error(err)
+			return
+		}
+		msgChan <- *message
+	}()
+	return msgChan
 }
 
 // Scans the IRC messages and writes them to the input channel
 func (cli *client) readInput() {
-	scanner := parser.NewScanner(cli.conn)
-
-	go func() {
-		// TODO: Use a close channel so the scan doesn't block the close
-		for !cli.Closed() {
-			message, err := scanner.Scan()
-
-			if err != nil {
-				cli.errorChan <- err
-				continue
-			}
-
-			logMessage(message)
-
-			cli.inputChan <- *message
+	defer cli.wg.Done()
+	for {
+		select {
+		case <-cli.ctx.Done():
+			return
+		case message := <-cli.Scan():
+			cli.logMessage(message)
+			cli.inputChan <- message
 		}
-	}()
+	}
+}
+
+func (cli *client) error(err error) {
+	if err == nil {
+		return
+	}
+	select {
+	case <-cli.ctx.Done():
+		return
+	default:
+	}
+	// TODO: Make this non-blocking?
+	cli.errorChan <- err
 }
 
 // For testing
-func logMessage(msg *parser.Message) {
-	log := logging.Logger()
-	log.Infow("Received", "message", msg)
+func (cli *client) logMessage(msg parser.Message) {
+	cli.log.Infow("Received", "message", msg)
 }
 
 // Writes each message from the channel to the IRC Connection
 func (cli *client) setupOutput() {
-	log := logging.Logger()
+	defer cli.wg.Done()
 	// TODO: Rate limit per output type
-	go func() {
-		for output := range cli.outputChan {
-			if cli.Closed() {
-				return
-			}
-			bytes := output.Bytes()
-			log.Infow("Output", "message", string(bytes))
-			// Message
-			if _, err := cli.conn.Write(bytes); err != nil {
-				cli.errorChan <- err
-				continue
-			}
-
-			// CRLF
-			if _, err := cli.conn.Write(crlfBytes); err != nil {
-				cli.errorChan <- err
+	for {
+		select {
+		case <-cli.ctx.Done():
+			return
+		case output := <-cli.outputChan:
+			if err := cli.write(output); err != nil {
+				// Connection closed
+				if errors.Is(err, io.EOF) {
+					return
+				}
+				cli.error(err)
 			}
 		}
-	}()
+	}
+}
+
+func (cli *client) write(msg IrcMessage) error {
+	bytes := msg.Bytes()
+	cli.log.Infow("Output", "message", string(bytes))
+	// Message
+	if _, err := cli.conn.Write(bytes); err != nil {
+		return err
+	}
+
+	// CRLF
+	_, err := cli.conn.Write(crlfBytes)
+	return err
 }

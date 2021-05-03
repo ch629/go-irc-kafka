@@ -2,15 +2,19 @@ package parser
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 	"unicode/utf8"
 )
 
-var Output = make(chan Message)
+var (
+	Output = make(chan Message)
+	eof    = rune(0)
 
-var eof = rune(0)
+	ErrReadingRune = errors.New("error reading rune")
+)
 
 // https://ircv3.net/specs/extensions/message-tags.html
 // https://tools.ietf.org/html/rfc1459.html#section-2.3.1
@@ -302,11 +306,11 @@ func (s *Scanner) peekRune() (rune, error) {
 	for peekBytes := 4; peekBytes > 0; peekBytes-- { // unicode rune can be up to 4 bytes
 		b, err := s.Peek(peekBytes)
 		if err == nil {
-			rune, _ := utf8.DecodeRune(b)
-			if rune == utf8.RuneError {
-				return rune, fmt.Errorf("Rune error")
+			r, _ := utf8.DecodeRune(b)
+			if r == utf8.RuneError {
+				return r, ErrReadingRune
 			}
-			return rune, nil
+			return r, nil
 		}
 	}
 

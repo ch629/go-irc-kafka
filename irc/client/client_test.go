@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"github.com/ch629/go-irc-kafka/irc/parser"
 	"testing"
 	"time"
@@ -18,8 +19,9 @@ func (mes *stringMessage) Bytes() []byte {
 }
 
 func Test_InputSmall(t *testing.T) {
-	var buf bytes.Buffer
-	ircClient := NewDefaultClient(&buf)
+	var buf bufCloser
+	ircClient := NewDefaultClient(context.Background(), &buf)
+	defer ircClient.Close()
 	buf.WriteString(":tmi.twitch.tv 001 thewolfpack :Welcome, GLHF!\r\n")
 
 	select {
@@ -41,16 +43,35 @@ func Test_InputSmall(t *testing.T) {
 }
 
 func Test_OutputSmall(t *testing.T) {
-	var buf bytes.Buffer
-	ircClient := NewDefaultClient(&buf)
+	var buf bufCloser
+	ircClient := NewDefaultClient(context.Background(), &buf)
+
+	go func() {
+		for range ircClient.Errors() {
+		}
+	}()
+	go func() {
+		for range ircClient.Input() {
+		}
+	}()
 
 	ircClient.Output() <- &stringMessage{
 		Message: "testing",
 	}
 
+	ircClient.Close()
+	<-ircClient.Done()
+
 	str, err := buf.ReadString('\n')
 
 	assert.NoError(t, err)
-
 	assert.Equal(t, "testing\r\n", str)
+}
+
+type bufCloser struct {
+	bytes.Buffer
+}
+
+func (bufCloser) Close() error {
+	return nil
 }

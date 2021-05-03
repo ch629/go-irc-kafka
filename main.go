@@ -1,22 +1,30 @@
 package main
 
 import (
+	"context"
+	_ "embed"
 	"fmt"
 	"github.com/ch629/go-irc-kafka/config"
 	"github.com/ch629/go-irc-kafka/irc/client"
 	"github.com/ch629/go-irc-kafka/irc/parser"
 	"github.com/ch629/go-irc-kafka/logging"
 	"github.com/ch629/go-irc-kafka/operations"
+	"github.com/dimiro1/banner"
 	"github.com/spf13/afero"
 	"net"
 	"os"
+	"strings"
 	"sync"
 )
+
+//go:embed banner.tmpl
+var bannerTmpl string
 
 // https://tools.ietf.org/html/rfc1459.html
 
 // TODO: Maybe add a rest endpoint to join/leave a channel or use a kafka topic with commands to handle from external sources
 func main() {
+	banner.Init(os.Stderr, true, false, strings.NewReader(bannerTmpl))
 	fs := afero.NewOsFs()
 	con, err := config.LoadConfig(fs)
 	if err != nil {
@@ -42,7 +50,7 @@ func main() {
 
 	defer conn.Close()
 
-	ircClient := client.NewDefaultClient(conn)
+	ircClient := client.NewDefaultClient(context.Background(), conn)
 
 	// Take output from the irc parser & send to handlers
 	go func() {
