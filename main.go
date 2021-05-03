@@ -13,8 +13,8 @@ import (
 	"github.com/spf13/afero"
 	"net"
 	"os"
+	"os/signal"
 	"strings"
-	"sync"
 )
 
 //go:embed banner.tmpl
@@ -26,15 +26,16 @@ var bannerTmpl string
 func main() {
 	banner.Init(os.Stderr, true, false, strings.NewReader(bannerTmpl))
 	fs := afero.NewOsFs()
+
+	signals := make(chan os.Signal)
+	signal.Notify(signals, os.Interrupt)
+
 	con, err := config.LoadConfig(fs)
 	if err != nil {
 		panic(err)
 	}
 
 	log := logging.Logger()
-	// TODO: Handle this WaitGroup better
-	wg := sync.WaitGroup{}
-	wg.Add(1)
 	client.InitializeConfig(con.Bot)
 	operations.InitConfig(con.Kafka)
 
@@ -51,6 +52,15 @@ func main() {
 	defer conn.Close()
 
 	ircClient := client.NewDefaultClient(context.Background(), conn)
+	// Close connection on interrupt
+	go func() {
+		select {
+		case <-signals:
+			ircClient.Close()
+		case <-ircClient.Done():
+			return
+		}
+	}()
 
 	// Take output from the irc parser & send to handlers
 	go func() {
@@ -70,8 +80,7 @@ func main() {
 	go operations.OutputStream(ircClient)
 
 	operations.Login()
-
-	wg.Wait()
+	<-ircClient.Done()
 }
 
 // TODO: Handle errors propagated through this
