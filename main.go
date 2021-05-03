@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"github.com/ch629/go-irc-kafka/config"
 	"github.com/ch629/go-irc-kafka/irc/client"
-	"github.com/ch629/go-irc-kafka/irc/parser"
 	"github.com/ch629/go-irc-kafka/logging"
 	"github.com/ch629/go-irc-kafka/operations"
 	"github.com/dimiro1/banner"
@@ -30,19 +29,16 @@ func main() {
 	signals := make(chan os.Signal)
 	signal.Notify(signals, os.Interrupt)
 
-	con, err := config.LoadConfig(fs)
+	conf, err := config.LoadConfig(fs)
 	if err != nil {
 		panic(err)
 	}
 
-	operations.InitializeConfig(con)
-
-	// Reads entire message objects created by the parser
-	operations.ReadInput()
+	operations.InitializeConfig(conf)
 
 	// Connect to IRC
 	// For some reason bringing this into a method blocks everything...?
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", con.Irc.Address)
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", conf.Irc.Address)
 	checkError(err)
 	conn, err := net.DialTCP("tcp", nil, tcpAddr)
 	checkError(err)
@@ -62,11 +58,7 @@ func main() {
 	}()
 
 	// Take output from the irc parser & send to handlers
-	go func() {
-		for input := range ircClient.Input() {
-			parser.Output <- input
-		}
-	}()
+	go operations.ReadInput(ircClient.Input())
 
 	// Handle errors from irc parsing
 	go func() {

@@ -10,10 +10,10 @@ import (
 )
 
 var (
-	Output = make(chan Message)
-	eof    = rune(0)
+	eof = rune(0)
 
-	ErrReadingRune = errors.New("error reading rune")
+	ErrReadingRune  = errors.New("error reading rune")
+	ErrEmptyMessage = errors.New("empty message")
 )
 
 // https://ircv3.net/specs/extensions/message-tags.html
@@ -47,16 +47,10 @@ func NewScanner(r io.Reader) *Scanner {
 
 // TODO: EOF checks
 // TODO: Escape inside of other funcs
-// Scan a line from the reader
+// Scan scans a line from the reader
 func (s *Scanner) Scan() (*Message, error) {
-	message := &Message{
-		Tags:    map[string]string{},
-		Prefix:  "",
-		Command: "",
-		Params:  []string{},
-	}
 	if s.isCrlf() {
-		return message, nil
+		return nil, ErrEmptyMessage
 	}
 
 	r, err := s.peekRune()
@@ -66,18 +60,22 @@ func (s *Scanner) Scan() (*Message, error) {
 	}
 
 	if r == eof {
-		return nil, fmt.Errorf("first character was an eof")
+		return nil, io.EOF
+	}
+
+	message := &Message{
+		Tags:   map[string]string{},
+		Params: []string{},
 	}
 
 	if r == '@' {
 		s.consume()
-		tags, err := s.readTags()
+		message.Tags, err = s.readTags()
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to read tags due to %w", err)
 		}
 
-		message.Tags = tags
 		r, err = s.peekRune()
 
 		if err != nil {
@@ -87,30 +85,24 @@ func (s *Scanner) Scan() (*Message, error) {
 
 	if r == ':' {
 		s.consume()
-		prefix, err := s.readPrefix()
+		message.Prefix, err = s.readPrefix()
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to read prefix due to %w", err)
 		}
-
-		message.Prefix = prefix
 	}
 
-	cmd, err := s.readCommand()
+	message.Command, err = s.readCommand()
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to read command due to %w", err)
 	}
 
-	message.Command = cmd
-
-	params, err := s.readParams()
+	message.Params, err = s.readParams()
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to read params due to %w", err)
 	}
-
-	message.Params = params
 
 	return message, nil
 }
@@ -123,7 +115,7 @@ var escapedMap = map[rune]rune{
 	'n':  '\n',
 }
 
-// Reads the tags BNF
+// readTags Reads the tags BNF
 func (s *Scanner) readTags() (map[string]string, error) {
 	tags := make(map[string]string)
 	key := true
@@ -179,7 +171,7 @@ func (s *Scanner) readTags() (map[string]string, error) {
 }
 
 // TODO: Prefix struct?
-// Reads the prefix BNF
+// readPrefix Reads the prefix BNF
 func (s *Scanner) readPrefix() (string, error) {
 	var sb strings.Builder
 	for {
@@ -193,7 +185,7 @@ func (s *Scanner) readPrefix() (string, error) {
 	}
 }
 
-// Reads the command BNF
+// readCommand Reads the command BNF
 func (s *Scanner) readCommand() (string, error) {
 	var sb strings.Builder
 	for {
@@ -207,7 +199,7 @@ func (s *Scanner) readCommand() (string, error) {
 	}
 }
 
-// Reads the param BNF
+// readParams Reads the param BNF
 func (s *Scanner) readParams() ([]string, error) {
 	params := make([]string, 0)
 	for {
@@ -248,7 +240,7 @@ func (s *Scanner) readParams() ([]string, error) {
 	}
 }
 
-// Reads the param trailing BNF
+// readParamTrailing Reads the param trailing BNF
 func (s *Scanner) readParamTrailing() (string, error) {
 	var sb strings.Builder
 	for {
@@ -256,11 +248,15 @@ func (s *Scanner) readParamTrailing() (string, error) {
 			return sb.String(), nil
 		}
 
-		sb.WriteRune(s.read())
+		r := s.read()
+		if r == eof {
+			return "", io.EOF
+		}
+		sb.WriteRune(r)
 	}
 }
 
-// Reads the param middle BNF
+// readParamMiddle Reads the param middle BNF
 func (s *Scanner) readParamMiddle() (string, error) {
 	var sb strings.Builder
 	for {
@@ -286,7 +282,7 @@ func (s *Scanner) readParamMiddle() (string, error) {
 	}
 }
 
-// Reads and consumers a single rune from the Scanner
+// read Reads and consumes a single rune from the Scanner
 func (s *Scanner) read() rune {
 	ch, _, err := s.ReadRune()
 
@@ -296,12 +292,12 @@ func (s *Scanner) read() rune {
 	return ch
 }
 
-// Consumes a single rune from the Scanner with no response
+// consume Consumes a single rune from the Scanner with no response
 func (s *Scanner) consume() {
 	_, _, _ = s.ReadRune()
 }
 
-// Reads a single rune from the Scanner without consuming it
+// peekRune Reads a single rune from the Scanner without consuming it
 func (s *Scanner) peekRune() (rune, error) {
 	for peekBytes := 4; peekBytes > 0; peekBytes-- { // unicode rune can be up to 4 bytes
 		b, err := s.Peek(peekBytes)
@@ -322,11 +318,7 @@ func (s *Scanner) peekRune() (rune, error) {
 func (s *Scanner) isCrlf() bool {
 	r, err := s.peekRune()
 
-	if err != nil {
-		return false
-	}
-
-	if r != '\r' {
+	if err != nil || r != '\r' {
 		return false
 	}
 

@@ -38,18 +38,16 @@ var ignoredCommands = map[string]*struct{}{
 	"375": nil,
 }
 
-func ReadInput() {
-	go func() {
-		for message := range parser.Output {
-			if _, ok := ignoredCommands[message.Command]; ok {
-				continue
-			}
-			if f, ok := commandMap[message.Command]; ok {
-				go f(message)
-			} else {
-				// Print out message if not known
-				log.Warnw("Received unknown message", "command", message.Command, "message", message)
-			}
+func ReadInput(channel <-chan parser.Message) {
+	for message := range channel {
+		if _, ok := ignoredCommands[message.Command]; ok {
+			continue
 		}
-	}()
+		if f, ok := commandMap[message.Command]; ok {
+			go f(message)
+		} else {
+			// Print out message if not known
+			log.Warnw("Received unknown message", "command", message.Command, "message", message)
+		}
+	}
 }
