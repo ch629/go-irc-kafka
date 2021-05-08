@@ -2,12 +2,16 @@ package logging
 
 import (
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 var logger zap.SugaredLogger
 
 func init() {
-	log, err := zap.NewDevelopment()
+	conf := zap.NewDevelopmentConfig()
+	conf.OutputPaths = []string{"stdout"}
+	conf.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	log, err := conf.Build()
 
 	if err != nil {
 		panic(err)

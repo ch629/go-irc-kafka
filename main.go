@@ -8,11 +8,11 @@ import (
 	"github.com/ch629/go-irc-kafka/kafka"
 	"github.com/ch629/go-irc-kafka/logging"
 	"github.com/ch629/go-irc-kafka/operations"
+	"github.com/ch629/go-irc-kafka/shutdown"
 	"github.com/dimiro1/banner"
 	"github.com/spf13/afero"
 	"net"
 	"os"
-	"os/signal"
 	"strings"
 )
 
@@ -23,12 +23,10 @@ var bannerTmpl string
 
 // TODO: Maybe add a rest endpoint to join/leave a channel or use a kafka topic with commands to handle from external sources
 func main() {
-	banner.Init(os.Stderr, true, false, strings.NewReader(bannerTmpl))
+	banner.Init(os.Stdout, true, true, strings.NewReader(bannerTmpl))
+	ctx := shutdown.InterruptAwareContext(context.Background())
 	log := logging.Logger()
 	fs := afero.NewOsFs()
-
-	signals := make(chan os.Signal)
-	signal.Notify(signals, os.Interrupt)
 
 	conf, err := config.LoadConfig(fs)
 	if err != nil {
@@ -44,17 +42,8 @@ func main() {
 
 	defer conn.Close()
 
-	ircClient := client.NewDefaultClient(context.Background(), conn)
+	ircClient := client.NewDefaultClient(ctx, conn)
 	// Close connection on interrupt
-	go func() {
-		select {
-		case <-signals:
-			ircClient.Close()
-			log.Info("Received interrupt")
-		case <-ircClient.Done():
-			return
-		}
-	}()
 
 	producer, err := kafka.NewDefaultProducer(conf.Kafka)
 	checkError(err)
