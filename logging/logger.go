@@ -5,21 +5,18 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-var logger zap.SugaredLogger
+var logger *zap.Logger
 
 func init() {
 	conf := zap.NewDevelopmentConfig()
 	conf.OutputPaths = []string{"stdout"}
 	conf.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-	log, err := conf.Build()
-
-	if err != nil {
+	var err error
+	if logger, err = conf.Build(); err != nil {
 		panic(err)
 	}
-
-	logger = *log.Sugar()
 }
 
-func Logger() zap.SugaredLogger {
+func Logger() *zap.Logger {
 	return logger
 }

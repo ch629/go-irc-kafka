@@ -12,14 +12,14 @@ type (
 	parserMessageHandler = func(handler OperationHandler, message parser.Message)
 
 	OperationHandler struct {
-		log       zap.SugaredLogger
+		log       *zap.Logger
 		producer  kafka.Producer
 		botConfig config.Bot
 	}
 )
 
-func MakeOperationHandler(botConfig config.Bot, producer kafka.Producer) OperationHandler {
-	return OperationHandler{
+func MakeOperationHandler(botConfig config.Bot, producer kafka.Producer) *OperationHandler {
+	return &OperationHandler{
 		log:       logging.Logger(),
 		producer:  producer,
 		botConfig: botConfig,
@@ -36,7 +36,7 @@ var commandMap = map[string]parserMessageHandler{
 	"353": func(handler OperationHandler, message parser.Message) {
 		// RPL_NAMREPLY
 		//  <channel> :[[@|+]<nick> [[@|+]<nick> [...]]]
-		handler.log.Infow("Received users", "users", message.Params)
+		handler.log.Info("Received users", zap.Strings("users", message.Params))
 	},
 	"366": func(handler OperationHandler, message parser.Message) {
 		// RPL_ENDOFNAMES
@@ -45,19 +45,19 @@ var commandMap = map[string]parserMessageHandler{
 	},
 	"JOIN": func(handler OperationHandler, message parser.Message) {
 		// Joined channel
-		handler.log.Infow("Joined channel", "channel", message.Params)
+		handler.log.Info("Joined channel", zap.Strings("channel", message.Params))
 	},
 	"421": func(handler OperationHandler, message parser.Message) {
-		handler.log.Warnw("Invalid command", "command", message.Params)
+		handler.log.Warn("Invalid command", zap.Strings("command", message.Params))
 	},
 	"USERSTATE": func(handler OperationHandler, message parser.Message) {
-		handler.log.Infow("Updating user state", "message", message)
+		handler.log.Info("Updating user state", zap.Any("message", message))
 	},
 	"USERNOTICE": func(handler OperationHandler, message parser.Message) {
-		handler.log.Infow("User notice", "message", message)
+		handler.log.Info("User notice", zap.Any("message", message))
 	},
 	"ROOMSTATE": func(handler OperationHandler, message parser.Message) {
-		handler.log.Infow("Room state", "message", message)
+		handler.log.Info("Room state", zap.Any("message", message))
 	},
 }
 
@@ -72,16 +72,19 @@ var ignoredCommands = map[string]*struct{}{
 	"CLEARCHAT": nil,
 }
 
-func (h OperationHandler) ReadInput(channel <-chan parser.Message) {
-	for message := range channel {
-		if _, ok := ignoredCommands[message.Command]; ok {
-			continue
+// TODO: Should this be called only internally, or do we expose it so somewhere else orchestrates it?
+func (h OperationHandler) HandleMessages(channel <-chan parser.Message) {
+	go func() {
+		for message := range channel {
+			if _, ok := ignoredCommands[message.Command]; ok {
+				continue
+			}
+			if f, ok := commandMap[message.Command]; ok {
+				go f(h, message)
+			} else {
+				// Print out message if not known
+				h.log.Warn("Received unknown message", zap.String("command", message.Command), zap.Any("message", message))
+			}
 		}
-		if f, ok := commandMap[message.Command]; ok {
-			go f(h, message)
-		} else {
-			// Print out message if not known
-			h.log.Warnw("Received unknown message", "command", message.Command, "message", message)
-		}
-	}
+	}()
 }

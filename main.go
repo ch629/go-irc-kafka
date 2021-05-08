@@ -11,6 +11,7 @@ import (
 	"github.com/ch629/go-irc-kafka/shutdown"
 	"github.com/dimiro1/banner"
 	"github.com/spf13/afero"
+	"go.uber.org/zap"
 	"net"
 	"os"
 	"strings"
@@ -51,18 +52,18 @@ func main() {
 	operationHandler := operations.MakeOperationHandler(conf.Bot, producer)
 
 	// Take output from the irc parser & send to handlers
-	go operationHandler.ReadInput(ircClient.Input())
+	operationHandler.HandleMessages(ircClient.Input())
 
 	// Handle errors from irc parsing
 	go func() {
 		for err := range ircClient.Errors() {
-			log.Errorw("error from irc client", "error", err)
+			log.Error("error from irc client", zap.Error(err))
 		}
 	}()
 
 	go func() {
 		for err := range producer.Errors() {
-			log.Errorw("error from producer", "error", err)
+			log.Error("error from producer", zap.Error(err))
 		}
 	}()
 
@@ -79,6 +80,6 @@ func main() {
 func checkError(err error) {
 	if err != nil {
 		log := logging.Logger()
-		log.Fatalw("Fatal error", err)
+		log.Fatal("Fatal error", zap.Error(err))
 	}
 }

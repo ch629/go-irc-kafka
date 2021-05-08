@@ -140,8 +140,10 @@ func (s *Scanner) readTags() (map[string]string, error) {
 
 		if !escaped {
 			if r == ' ' {
-				// Push key & value pair to map, return tags
-				tags[keyBuilder.String()] = valueBuilder.String()
+				// Push key & value pair to map if not empty, return tags
+				if keyBuilder.Len() > 0 && valueBuilder.Len() > 0 {
+					tags[keyBuilder.String()] = valueBuilder.String()
+				}
 				return tags, nil
 			}
 
@@ -151,8 +153,10 @@ func (s *Scanner) readTags() (map[string]string, error) {
 			}
 
 			if r == ';' {
-				// Push key & value pair to map
-				tags[keyBuilder.String()] = valueBuilder.String()
+				// Push key & value pair to map if not empty
+				if keyBuilder.Len() > 0 && valueBuilder.Len() > 0 {
+					tags[keyBuilder.String()] = valueBuilder.String()
+				}
 
 				keyBuilder.Reset()
 				valueBuilder.Reset()

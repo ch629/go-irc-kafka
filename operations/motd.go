@@ -3,6 +3,7 @@ package operations
 import (
 	"fmt"
 	"github.com/ch629/go-irc-kafka/irc/parser"
+	"go.uber.org/zap"
 	"strings"
 )
 
@@ -14,6 +15,6 @@ func handleMotd(handler OperationHandler, message parser.Message) {
 }
 
 func handleMotdEnd(handler OperationHandler, _ parser.Message) {
-	handler.log.Infow("MOTD", "message", motd.String())
+	handler.log.Info("MOTD", zap.String("message", motd.String()))
 	motd.Reset()
 }

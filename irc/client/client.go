@@ -37,7 +37,7 @@ type (
 		inputChan  chan parser.Message
 		outputChan chan IrcMessage
 		errorChan  chan error
-		log        zap.SugaredLogger
+		log        *zap.Logger
 		scanner    parser.Scanner
 		wg         sync.WaitGroup
 		done       chan struct{}
@@ -136,7 +136,7 @@ func (cli *client) readInput() {
 		case message := <-cli.scan():
 			err := message.Error
 			if err != nil {
-				cli.log.Warnw("cli scan error", "err", err)
+				cli.log.Warn("cli scan error", zap.Error(err))
 				if errors.Is(err, io.EOF) {
 					cli.log.Warn("closing input stream")
 					cli.cancelFunc()
@@ -166,7 +166,7 @@ func (cli *client) error(err error) {
 
 // For testing
 func (cli *client) logMessage(msg parser.Message) {
-	cli.log.Infow("Received", "message", msg)
+	cli.log.Info("Received", zap.Any("message", msg))
 }
 
 // Writes each message from the channel to the IRC Connection
@@ -191,7 +191,7 @@ func (cli *client) setupOutput() {
 
 func (cli *client) write(msg IrcMessage) error {
 	bytes := msg.Bytes()
-	cli.log.Infow("Output", "message", string(bytes))
+	cli.log.Info("Output", zap.ByteString("message", bytes))
 	// Message
 	if _, err := cli.conn.Write(bytes); err != nil {
 		return err
