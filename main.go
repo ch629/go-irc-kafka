@@ -67,22 +67,12 @@ func main() {
 	// Handle errors from irc parsing
 	go func() {
 		for err := range ircClient.Errors() {
-			select {
-			case <-ircClient.Done():
-				return
-			default:
-			}
 			log.Errorw("error from irc client", "error", err)
 		}
 	}()
 
 	go func() {
 		for err := range producer.Errors() {
-			select {
-			case <-ircClient.Done():
-				return
-			default:
-			}
 			log.Errorw("error from producer", "error", err)
 		}
 	}()
