@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"github.com/ch629/go-irc-kafka/config"
 	"github.com/ch629/go-irc-kafka/irc/client"
+	"github.com/ch629/go-irc-kafka/kafka"
 	"github.com/ch629/go-irc-kafka/logging"
 	"github.com/ch629/go-irc-kafka/operations"
 	"github.com/dimiro1/banner"
@@ -34,8 +35,6 @@ func main() {
 		panic(err)
 	}
 
-	operations.InitializeConfig(conf)
-
 	// Connect to IRC
 	// For some reason bringing this into a method blocks everything...?
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", conf.Irc.Address)
@@ -57,21 +56,43 @@ func main() {
 		}
 	}()
 
+	producer, err := kafka.NewDefaultProducer(conf.Kafka)
+	checkError(err)
+
+	operationHandler := operations.MakeOperationHandler(conf.Bot, producer)
+
 	// Take output from the irc parser & send to handlers
-	go operations.ReadInput(ircClient.Input())
+	go operationHandler.ReadInput(ircClient.Input())
 
 	// Handle errors from irc parsing
 	go func() {
 		for err := range ircClient.Errors() {
+			select {
+			case <-ircClient.Done():
+				return
+			default:
+			}
 			log.Errorw("error from irc client", "error", err)
+		}
+	}()
+
+	go func() {
+		for err := range producer.Errors() {
+			select {
+			case <-ircClient.Done():
+				return
+			default:
+			}
+			log.Errorw("error from producer", "error", err)
 		}
 	}()
 
 	// Setup output back to IRC
 	go operations.OutputStream(ircClient)
 
-	operations.Login()
+	operationHandler.Login()
 	<-ircClient.Done()
+	checkError(producer.Close())
 	log.Info("Finished shutting down")
 }
 

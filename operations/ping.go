@@ -5,6 +5,6 @@ import (
 	"github.com/ch629/go-irc-kafka/twitch"
 )
 
-func handlePing(message parser.Message) {
+func handlePing(handler OperationHandler, message parser.Message) {
 	Write(twitch.MakePongCommand(message.Params[0]))
 }

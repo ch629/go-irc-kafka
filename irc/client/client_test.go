@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"github.com/ch629/go-irc-kafka/irc/parser"
+	"io"
 	"testing"
 	"time"
 
@@ -66,6 +67,31 @@ func Test_OutputSmall(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, "testing\r\n", str)
+}
+
+func TestNewDefaultClient_EOF(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cli := NewDefaultClient(ctx, eofReadWriteCloser{})
+	t.Cleanup(cancel)
+	select {
+	case <-cli.Done():
+	case <-time.After(5 * time.Second):
+		assert.Fail(t, "Client didn't close after EOF")
+	}
+}
+
+type eofReadWriteCloser struct{}
+
+func (eofReadWriteCloser) Read(_ []byte) (n int, err error) {
+	return 0, io.EOF
+}
+
+func (eofReadWriteCloser) Write(_ []byte) (n int, err error) {
+	return 0, io.EOF
+}
+
+func (eofReadWriteCloser) Close() error {
+	return nil
 }
 
 type bufCloser struct {

@@ -30,10 +30,10 @@ type (
 	}
 
 	Message struct {
-		Tags    map[string]string
-		Prefix  string
-		Command string
-		Params  []string
+		Tags    map[string]string `json:"tags,omitempty"`
+		Prefix  string            `json:"prefix,omitempty"`
+		Command string            `json:"command"`
+		Params  []string          `json:"params,omitempty"`
 	}
 )
 

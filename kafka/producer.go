@@ -12,6 +12,7 @@ type (
 	Producer interface {
 		Send(message *pb.ChatMessage)
 		Close() error
+		Errors() <-chan *sarama.ProducerError
 	}
 
 	producer struct {
@@ -23,8 +24,8 @@ type (
 func NewDefaultProducer(kafkaConfig config.Kafka) (Producer, error) {
 	saramaConfig := sarama.NewConfig()
 	brokers := kafkaConfig.Brokers
-	// TODO: Expose the errors
-	saramaConfig.Producer.Return.Errors = false
+	saramaConfig.Producer.Partitioner = sarama.NewRoundRobinPartitioner
+	saramaConfig.Producer.Compression = sarama.CompressionSnappy
 
 	pro, err := sarama.NewAsyncProducer(brokers, saramaConfig)
 	if err != nil {

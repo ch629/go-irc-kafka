@@ -110,20 +110,18 @@ func (cli *client) Closed() bool {
 	}
 }
 
-func (cli *client) Scan() <-chan parser.Message {
-	msgChan := make(chan parser.Message)
+// messageError is used for scanning to return either a message or an error
+type messageError struct {
+	Message *parser.Message
+	Error   error
+}
+
+func (cli *client) scan() <-chan messageError {
+	msgChan := make(chan messageError)
 	go func() {
 		defer close(msgChan)
 		message, err := cli.scanner.Scan()
-		if err != nil {
-			// Connection closed
-			if errors.Is(err, io.EOF) {
-				return
-			}
-			cli.error(err)
-			return
-		}
-		msgChan <- *message
+		msgChan <- messageError{message, err}
 	}()
 	return msgChan
 }
@@ -135,12 +133,20 @@ func (cli *client) readInput() {
 		select {
 		case <-cli.ctx.Done():
 			return
-		// TODO: Sometimes we just endlessly get an empty message:
-		//  client/client.go:160	  Received	                {"message": {"Tags":null,"Prefix":"","Command":"","Params":null}}
-		//  operations/command.go:51  Received unknown message	{"command": "", "message": {"Tags":null,"Prefix":"","Command":"","Params":null}}
-		case message := <-cli.Scan():
-			cli.logMessage(message)
-			cli.inputChan <- message
+		case message := <-cli.scan():
+			err := message.Error
+			if err != nil {
+				cli.log.Warnw("cli scan error", "err", err)
+				if errors.Is(err, io.EOF) {
+					cli.log.Warn("closing input stream")
+					cli.cancelFunc()
+					return
+				}
+				continue
+			}
+			msg := *message.Message
+			cli.logMessage(msg)
+			cli.inputChan <- msg
 		}
 	}
 }

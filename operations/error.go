@@ -2,12 +2,9 @@ package operations
 
 import (
 	"github.com/ch629/go-irc-kafka/irc/parser"
-	"github.com/ch629/go-irc-kafka/logging"
 )
 
-func handleErrorMessage(message parser.Message) {
-	log := logging.Logger()
-
+func handleErrorMessage(handler OperationHandler, message parser.Message) {
 	// TODO: Format the message?
-	log.Errorw("Received error from IRC", "message", message)
+	handler.log.Errorw("Received error from IRC", "message", message)
 }

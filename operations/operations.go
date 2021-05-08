@@ -65,9 +65,9 @@ func makeStruct(data map[string]string) *structpb.Struct {
 	}
 }
 
-func Login() {
-	Write(twitch.MakePassCommand(botConfig.OAuthToken))
-	Write(twitch.MakeNickCommand(botConfig.Name))
+func (h OperationHandler) Login() {
+	Write(twitch.MakePassCommand(h.botConfig.OAuth))
+	Write(twitch.MakeNickCommand(h.botConfig.Name))
 	requestCapability(twitch.TAGS)
 	requestCapability(twitch.COMMANDS)
 }
@@ -79,8 +79,8 @@ func checkError(err error) {
 	}
 }
 
-func handleWelcome(_ parser.Message) {
-	for _, channel := range botConfig.Channels {
+func handleWelcome(handler OperationHandler, _ parser.Message) {
+	for _, channel := range handler.botConfig.Channels {
 		joinChannel(channel)
 	}
 }
