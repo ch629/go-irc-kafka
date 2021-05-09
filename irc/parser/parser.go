@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"unicode/utf8"
 )
 
 // maxMessageLength is the maximum amount of runes to read before returning an error
@@ -15,7 +14,6 @@ const maxMessageLength = 512
 var (
 	eof = rune(0)
 
-	ErrReadingRune  = errors.New("error reading rune")
 	ErrEmptyMessage = errors.New("empty message")
 	ErrNoCommand    = errors.New("no command")
 	ErrNoPrefix     = errors.New("no prefix")
@@ -291,13 +289,12 @@ func (s *Scanner) readUntil(untilInclusive []rune, untilExclusive []rune) (strin
 }
 
 // read Reads and consumes a single rune from the Scanner
-func (s *Scanner) read() rune {
-	ch, _, err := s.ReadRune()
-
-	if err != nil {
-		return eof
+func (s *Scanner) read() (r rune) {
+	var err error
+	if r, _, err = s.ReadRune(); err != nil {
+		r = eof
 	}
-	return ch
+	return
 }
 
 // consume Consumes a single rune from the Scanner with no response
@@ -307,18 +304,11 @@ func (s *Scanner) consume() {
 
 // peekRune Reads a single rune from the Scanner without consuming it
 func (s *Scanner) peekRune() (rune, error) {
-	for peekBytes := 4; peekBytes > 0; peekBytes-- { // unicode rune can be up to 4 bytes
-		b, err := s.Peek(peekBytes)
-		if err == nil {
-			r, _ := utf8.DecodeRune(b)
-			if r == utf8.RuneError {
-				return r, ErrReadingRune
-			}
-			return r, nil
-		}
+	r, _, err := s.ReadRune()
+	if err != nil {
+		return r, err
 	}
-
-	return eof, io.EOF
+	return r, s.UnreadRune()
 }
 
 // Detects if the next runes are CRLF
