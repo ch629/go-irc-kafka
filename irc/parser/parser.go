@@ -77,37 +77,27 @@ func (s *Scanner) Scan() (*Message, error) {
 
 	if r == '@' {
 		s.consume()
-		message.Tags, err = s.readTags()
-
-		if err != nil {
+		if message.Tags, err = s.readTags(); err != nil {
 			return nil, fmt.Errorf("failed to read tags due to %w", err)
 		}
 
-		r, err = s.peekRune()
-
-		if err != nil {
+		if r, err = s.peekRune(); err != nil {
 			return nil, fmt.Errorf("failed to peek rune due to %w", err)
 		}
 	}
 
 	if r == ':' {
 		s.consume()
-		message.Prefix, err = s.readPrefix()
-
-		if err != nil {
+		if message.Prefix, err = s.readPrefix(); err != nil {
 			return nil, fmt.Errorf("failed to read prefix due to %w", err)
 		}
 	}
 
-	message.Command, err = s.readCommand()
-
-	if err != nil {
+	if message.Command, err = s.readCommand(); err != nil {
 		return nil, fmt.Errorf("failed to read command due to %w", err)
 	}
 
-	message.Params, err = s.readParams()
-
-	if err != nil {
+	if message.Params, err = s.readParams(); err != nil {
 		return nil, fmt.Errorf("failed to read params due to %w", err)
 	}
 
@@ -182,27 +172,25 @@ func (s *Scanner) readTags() (map[string]string, error) {
 
 // TODO: Prefix struct?
 // readPrefix Reads the prefix BNF
-func (s *Scanner) readPrefix() (string, error) {
-	str, err := s.readUntil([]rune{' '}, []rune{})
-	if err != nil {
-		return "", err
+func (s *Scanner) readPrefix() (str string, err error) {
+	if str, err = s.readUntil([]rune{' '}, []rune{}); err != nil {
+		return
 	}
 	if len(str) == 0 {
 		return "", ErrNoPrefix
 	}
-	return str, nil
+	return
 }
 
 // readCommand Reads the command BNF
-func (s *Scanner) readCommand() (string, error) {
-	str, err := s.readUntil([]rune{' '}, []rune{})
-	if err != nil {
-		return "", err
+func (s *Scanner) readCommand() (str string, err error) {
+	if str, err = s.readUntil([]rune{' '}, []rune{}); err != nil {
+		return
 	}
 	if len(str) == 0 {
 		return "", ErrNoCommand
 	}
-	return str, nil
+	return
 }
 
 // readParams Reads the param BNF
@@ -247,9 +235,10 @@ func (s *Scanner) readParams() ([]string, error) {
 }
 
 // readParamTrailing Reads the param trailing BNF
+// returns ErrTooLong if too many runes have been read
 func (s *Scanner) readParamTrailing() (string, error) {
 	var sb strings.Builder
-	for {
+	for i := 0; i < maxMessageLength; i++ {
 		if s.isCrlf() {
 			return sb.String(), nil
 		}
@@ -260,6 +249,7 @@ func (s *Scanner) readParamTrailing() (string, error) {
 		}
 		sb.WriteRune(r)
 	}
+	return "", ErrTooLong
 }
 
 // readParamMiddle Reads the param middle BNF

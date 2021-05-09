@@ -2,29 +2,22 @@ package main
 
 import (
 	"context"
-	_ "embed"
 	"github.com/ch629/go-irc-kafka/config"
 	"github.com/ch629/go-irc-kafka/irc/client"
 	"github.com/ch629/go-irc-kafka/kafka"
 	"github.com/ch629/go-irc-kafka/logging"
 	"github.com/ch629/go-irc-kafka/operations"
 	"github.com/ch629/go-irc-kafka/shutdown"
-	"github.com/dimiro1/banner"
+	_ "github.com/dimiro1/banner/autoload"
 	"github.com/spf13/afero"
 	"go.uber.org/zap"
 	"net"
-	"os"
-	"strings"
 )
-
-//go:embed banner.tmpl
-var bannerTmpl string
 
 // https://tools.ietf.org/html/rfc1459.html
 
 // TODO: Maybe add a rest endpoint to join/leave a channel or use a kafka topic with commands to handle from external sources
 func main() {
-	banner.Init(os.Stdout, true, true, strings.NewReader(bannerTmpl))
 	ctx := shutdown.InterruptAwareContext(context.Background())
 	log := logging.Logger()
 	fs := afero.NewOsFs()

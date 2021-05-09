@@ -1,6 +1,9 @@
 package bot
 
-import "github.com/ch629/go-irc-kafka/twitch"
+import (
+	"github.com/ch629/go-irc-kafka/twitch"
+	"time"
+)
 
 type (
 	State struct {
@@ -9,9 +12,9 @@ type (
 	}
 	ChannelState struct {
 		EmoteOnly      bool
-		FollowerOnly   int
+		FollowerOnly   time.Duration
 		R9k            bool
-		Slow           int
+		Slow           time.Duration
 		SubscriberOnly bool
 	}
 	UserState struct {

@@ -3,6 +3,7 @@ package shutdown
 import (
 	"context"
 	"github.com/ch629/go-irc-kafka/logging"
+	"go.uber.org/zap"
 	"os"
 	"os/signal"
 )
@@ -14,9 +15,8 @@ func InterruptAwareContext(ctx context.Context) context.Context {
 	go func() {
 		defer close(signals)
 		select {
-		case <-signals:
-			log := logging.Logger()
-			log.Info("Received interrupt")
+		case s := <-signals:
+			logging.Logger().Info("Cancelling context due to", zap.Stringer("signal", s))
 			cancelFunc()
 		case <-ctx.Done():
 		}

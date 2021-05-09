@@ -4,22 +4,19 @@ import (
 	"context"
 	"errors"
 	"github.com/ch629/go-irc-kafka/irc/parser"
-	"github.com/ch629/go-irc-kafka/logging"
-	"go.uber.org/zap"
 	"io"
 	"sync"
 )
 
 type (
 	IrcClient interface {
+		io.Closer
 		// Input is a channel of messages coming from IRC
 		Input() <-chan parser.Message
 		// Output is a channel of messages to send to IRC
 		Output() chan<- IrcMessage
 		// Errors is a channel of errors generated when reading or writing to IRC
 		Errors() <-chan error
-		// Close closes the client connections
-		Close()
 		// Closed is whether the client connection is closed
 		Closed() bool
 		// Done is a channel to notify consumers when the client is done closing
@@ -37,7 +34,6 @@ type (
 		inputChan  chan parser.Message
 		outputChan chan IrcMessage
 		errorChan  chan error
-		log        *zap.Logger
 		scanner    parser.Scanner
 		wg         sync.WaitGroup
 		done       chan struct{}
@@ -53,7 +49,6 @@ func NewDefaultClient(ctx context.Context, conn io.ReadWriteCloser) IrcClient {
 		outputChan: make(chan IrcMessage),
 		errorChan:  make(chan error),
 		done:       make(chan struct{}),
-		log:        logging.Logger(),
 		scanner:    *parser.NewScanner(conn),
 	}
 	cli.ctx, cli.cancelFunc = context.WithCancel(ctx)
@@ -73,7 +68,6 @@ func (cli *client) Done() <-chan struct{} {
 // cleanup closes all channels once goroutines are finished
 func (cli *client) cleanup() {
 	cli.wg.Wait()
-	cli.log.Info("closing client channels")
 	close(cli.inputChan)
 	close(cli.outputChan)
 	close(cli.errorChan)
@@ -97,8 +91,9 @@ func (cli *client) Errors() <-chan error {
 }
 
 // Close closes the connection & cancels goroutines
-func (cli *client) Close() {
+func (cli *client) Close() error {
 	cli.cancelFunc()
+	return nil
 }
 
 func (cli *client) Closed() bool {
@@ -136,16 +131,13 @@ func (cli *client) readInput() {
 		case message := <-cli.scan():
 			err := message.Error
 			if err != nil {
-				cli.log.Warn("cli scan error", zap.Error(err))
 				if errors.Is(err, io.EOF) {
-					cli.log.Warn("closing input stream")
 					cli.cancelFunc()
 					return
 				}
 				continue
 			}
 			msg := *message.Message
-			cli.logMessage(msg)
 			cli.inputChan <- msg
 		}
 	}
@@ -162,11 +154,6 @@ func (cli *client) error(err error) {
 	}
 	// TODO: Make this non-blocking?
 	cli.errorChan <- err
-}
-
-// For testing
-func (cli *client) logMessage(msg parser.Message) {
-	cli.log.Info("Received", zap.Any("message", msg))
 }
 
 // Writes each message from the channel to the IRC Connection
@@ -190,14 +177,6 @@ func (cli *client) setupOutput() {
 }
 
 func (cli *client) write(msg IrcMessage) error {
-	bytes := msg.Bytes()
-	cli.log.Info("Output", zap.ByteString("message", bytes))
-	// Message
-	if _, err := cli.conn.Write(bytes); err != nil {
-		return err
-	}
-
-	// CRLF
-	_, err := cli.conn.Write(crlfBytes)
+	_, err := cli.conn.Write(append(msg.Bytes(), '\r', '\n'))
 	return err
 }

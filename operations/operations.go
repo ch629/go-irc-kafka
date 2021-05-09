@@ -36,7 +36,7 @@ func requestCapability(cap twitch.Capability) {
 	Write(twitch.MakeCapabilityRequest(cap))
 }
 
-func makeProtoMessage(message *ChannelMessage) *pb.ChatMessage {
+func makeProtoMessage(message ChannelMessage) *pb.ChatMessage {
 	ts, err := ptypes.TimestampProto(message.Timestamp)
 	checkError(err)
 
@@ -50,14 +50,12 @@ func makeProtoMessage(message *ChannelMessage) *pb.ChatMessage {
 }
 
 func makeStruct(data map[string]string) *structpb.Struct {
-	var structMap = make(map[string]*structpb.Value)
+	structMap := make(map[string]*structpb.Value, len(data))
 	for k, v := range data {
-		if len(v) > 0 {
-			structMap[k] = &structpb.Value{
-				Kind: &structpb.Value_StringValue{
-					StringValue: v,
-				},
-			}
+		structMap[k] = &structpb.Value{
+			Kind: &structpb.Value_StringValue{
+				StringValue: v,
+			},
 		}
 	}
 	return &structpb.Struct{

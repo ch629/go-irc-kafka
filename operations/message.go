@@ -16,7 +16,7 @@ type ChannelMessage struct {
 
 func handleMessage(handler OperationHandler, message parser.Message) {
 	user := strings.Split(message.Prefix, "!")[0]
-	mes := &ChannelMessage{
+	mes := ChannelMessage{
 		Timestamp: time.Now(),
 		Sender:    user,
 		Channel:   message.Params[0][1:],

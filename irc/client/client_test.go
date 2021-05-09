@@ -44,29 +44,17 @@ func Test_InputSmall(t *testing.T) {
 }
 
 func Test_OutputSmall(t *testing.T) {
-	var buf bufCloser
-	ircClient := NewDefaultClient(context.Background(), &buf)
+	buf := &bufCloser{}
+	ircClient := NewDefaultClient(context.Background(), buf)
+	defer ircClient.Close()
 
-	go func() {
-		for range ircClient.Errors() {
-		}
-	}()
-	go func() {
-		for range ircClient.Input() {
-		}
-	}()
+	go consumeErrors(ircClient)
+	go consumeInput(ircClient)
 
-	ircClient.Output() <- &stringMessage{
-		Message: "testing",
-	}
+	msg := &stringMessage{"testing"}
+	ircClient.Output() <- msg
 
-	ircClient.Close()
-	<-ircClient.Done()
-
-	str, err := buf.ReadString('\n')
-
-	assert.NoError(t, err)
-	assert.Equal(t, "testing\r\n", str)
+	assert.Equal(t, "testing\r\n", buf.String())
 }
 
 func TestNewDefaultClient_EOF(t *testing.T) {
@@ -77,6 +65,16 @@ func TestNewDefaultClient_EOF(t *testing.T) {
 	case <-cli.Done():
 	case <-time.After(5 * time.Second):
 		assert.Fail(t, "Client didn't close after EOF")
+	}
+}
+
+func consumeErrors(client IrcClient) {
+	for range client.Errors() {
+	}
+}
+
+func consumeInput(client IrcClient) {
+	for range client.Input() {
 	}
 }
 
