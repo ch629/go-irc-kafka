@@ -321,17 +321,13 @@ func (s *Scanner) peekRune() (rune, error) {
 	return eof, io.EOF
 }
 
-// TODO: Error if it's \r without \n?
 // Detects if the next runes are CRLF
 func (s *Scanner) isCrlf() bool {
-	r, err := s.peekRune()
-
-	if err != nil || r != '\r' {
+	if bs, err := s.Peek(2); err != nil || bs[0] != '\r' || bs[1] != '\n' {
 		return false
 	}
 
-	// Consume \r
-	s.consume()
-
-	return s.read() == '\n'
+	// Consume
+	_, _ = s.Read(make([]byte, 2))
+	return true
 }

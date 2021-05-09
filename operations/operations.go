@@ -7,21 +7,37 @@ import (
 	pb "github.com/ch629/go-irc-kafka/proto"
 	"github.com/ch629/go-irc-kafka/twitch"
 	"os"
+	"sync"
 
 	"github.com/golang/protobuf/ptypes"
 	structpb "github.com/golang/protobuf/ptypes/struct"
 )
 
 var output = make(chan client.IrcMessage)
+var outputClosed = false
+var outputMux sync.Mutex
 
 func OutputStream(client client.IrcClient) {
 	for message := range output {
+		select {
+		case <-client.Done():
+			outputMux.Lock()
+			outputClosed = true
+			close(output)
+			outputMux.Unlock()
+			return
+		default:
+		}
 		client.Output() <- message
 	}
 }
 
 func Write(message client.IrcMessage) {
-	output <- message
+	outputMux.Lock()
+	defer outputMux.Unlock()
+	if !outputClosed {
+		output <- message
+	}
 }
 
 func joinChannel(channel string) {
