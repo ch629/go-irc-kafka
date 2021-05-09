@@ -48,14 +48,23 @@ var commandMap = map[string]parserMessageHandler{
 		handler.log.Info("User notice", zap.Any("message", message))
 	},
 	"ROOMSTATE": func(handler OperationHandler, message parser.Message) {
+		var err error
 		channelName := message.Params[0][1:]
-		followerSeconds, err := strconv.Atoi(message.Tags["followers-only"])
-		if err != nil {
-			panic(err)
+		followerSeconds := 0
+		if followers, ok := message.Tags["followers-only"]; ok {
+			followerSeconds, err = strconv.Atoi(followers)
+			if err != nil {
+				logging.Logger().Error("Failed to atoi followers", zap.Error(err), zap.Any("tags", message.Tags))
+				return
+			}
 		}
-		slowSeconds, err := strconv.Atoi(message.Tags["slow"])
-		if err != nil {
-			panic(err)
+		slowSeconds := 0
+		if slow, ok := message.Tags["slow"]; ok {
+			slowSeconds, err = strconv.Atoi(slow)
+			if err != nil {
+				logging.Logger().Error("Failed to atoi slow", zap.Error(err), zap.Any("tags", message.Tags))
+				return
+			}
 		}
 		state := bot.ChannelState{
 			EmoteOnly:      message.Tags["emote-only"] == "1",
@@ -71,6 +80,15 @@ var commandMap = map[string]parserMessageHandler{
 	},
 	"CLEARCHAT": func(handler OperationHandler, message parser.Message) {
 		handler.log.Info("Chat has been cleared", zap.Any("message", message))
+	},
+	"CLEARMSG": func(handler OperationHandler, message parser.Message) {
+		handler.log.Info("Message has been cleared", zap.Any("message", message))
+	},
+	"NOTICE": func(handler OperationHandler, message parser.Message) {
+		handler.log.Info("Received notice", zap.Any("message", message))
+	},
+	"HOSTTARGET": func(handler OperationHandler, message parser.Message) {
+		handler.log.Info("Channel is hosting", zap.Any("message", message))
 	},
 }
 
@@ -88,6 +106,10 @@ var ignoredCommands = map[string]*struct{}{
 	"002": nil,
 	"003": nil,
 	"004": nil,
+	// usually a ban
+	"CLEARCHAT": nil,
+	// single message clear
+	"CLEARMSG": nil,
 }
 
 // TODO: Should this be called only internally, or do we expose it so somewhere else orchestrates it?

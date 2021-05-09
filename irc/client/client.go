@@ -9,6 +9,7 @@ import (
 )
 
 type (
+	// TODO: Store somewhere why it was closed so we can attempt to reconnect if it was just disconnected
 	IrcClient interface {
 		io.Closer
 		// Input is a channel of messages coming from IRC
@@ -39,8 +40,6 @@ type (
 		done       chan struct{}
 	}
 )
-
-var crlfBytes = []byte{'\r', '\n'}
 
 func NewDefaultClient(ctx context.Context, conn io.ReadWriteCloser) IrcClient {
 	cli := &client{
@@ -97,12 +96,7 @@ func (cli *client) Close() error {
 }
 
 func (cli *client) Closed() bool {
-	select {
-	case <-cli.ctx.Done():
-		return true
-	default:
-		return false
-	}
+	return cli.ctx.Err() != nil
 }
 
 // messageError is used for scanning to return either a message or an error

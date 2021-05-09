@@ -27,44 +27,52 @@ func main() {
 		panic(err)
 	}
 
-	// Connect to IRC
-	// For some reason bringing this into a method blocks everything...?
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", conf.Irc.Address)
-	checkError(err)
-	conn, err := net.DialTCP("tcp", nil, tcpAddr)
-	checkError(err)
-
-	defer conn.Close()
-
-	ircClient := client.NewDefaultClient(ctx, conn)
-	// Close connection on interrupt
-
 	producer, err := kafka.NewDefaultProducer(conf.Kafka)
 	checkError(err)
-
-	operationHandler := operations.MakeOperationHandler(conf.Bot, producer)
-
-	// Take output from the irc parser & send to handlers
-	operationHandler.HandleMessages(ircClient.Input())
-
-	// Handle errors from irc parsing
-	go func() {
-		for err := range ircClient.Errors() {
-			log.Error("error from irc client", zap.Error(err))
-		}
-	}()
 
 	go func() {
 		for err := range producer.Errors() {
 			log.Error("error from producer", zap.Error(err))
 		}
 	}()
+	operationHandler := operations.MakeOperationHandler(conf.Bot, producer)
 
-	// Setup output back to IRC
-	go operations.OutputStream(ircClient)
+loop:
+	// Retry connection if we randomly close
+	for {
+		select {
+		case <-ctx.Done():
+			break loop
+		default:
+		}
+		// Connect to IRC
+		// For some reason bringing this into a method blocks everything...?
+		tcpAddr, err := net.ResolveTCPAddr("tcp4", conf.Irc.Address)
+		checkError(err)
+		conn, err := net.DialTCP("tcp", nil, tcpAddr)
+		checkError(err)
 
-	operationHandler.Login()
-	<-ircClient.Done()
+		ircClient := client.NewDefaultClient(ctx, conn)
+		// Close connection on interrupt
+
+		// Take output from the irc parser & send to handlers
+		operationHandler.HandleMessages(ircClient.Input())
+
+		// Handle errors from irc parsing
+		go func() {
+			for err := range ircClient.Errors() {
+				log.Error("error from irc client", zap.Error(err))
+			}
+		}()
+
+		// Setup output back to IRC
+		go operations.OutputStream(ircClient)
+
+		operationHandler.Login()
+		<-ircClient.Done()
+		log.Info("Client stopped")
+		conn.Close()
+	}
 	checkError(producer.Close())
 	log.Info("Finished shutting down")
 }
