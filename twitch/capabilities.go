@@ -26,6 +26,14 @@ func (cap Capability) String() string {
 	}[cap]
 }
 
+func CapabilityFromParam(param string) Capability {
+	return map[string]Capability{
+		"twitch.tv/membership": MEMBERSHIP,
+		"twitch.tv/tags":       TAGS,
+		"twitch.tv/commands":   COMMANDS,
+	}[param]
+}
+
 func (message *capabilityRequestMessage) Bytes() []byte {
 	return []byte(fmt.Sprintf("CAP REQ :twitch.tv/%v", message.Capability.String()))
 }

@@ -15,6 +15,7 @@ type (
 		// Input is a channel of messages coming from IRC
 		Input() <-chan parser.Message
 		// Output is a channel of messages to send to IRC
+		// TODO: Replace output with a send func which will just send on the channel?
 		Output() chan<- IrcMessage
 		// Errors is a channel of errors generated when reading or writing to IRC
 		Errors() <-chan error
