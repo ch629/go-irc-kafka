@@ -13,6 +13,7 @@ import (
 )
 
 type (
+	// TODO: Interface
 	Bot struct {
 		ctx       context.Context
 		State     *State
@@ -86,6 +87,12 @@ func (b *Bot) handleMessages() {
 	}
 }
 
+// Login sends the required messages to IRC to login
+func (b *Bot) Login(name, pass string) {
+	b.Send(twitch.MakePassCommand(pass), twitch.MakeNickCommand(name))
+}
+
+// Send sends messages to IRC
 func (b *Bot) Send(messages ...client.IrcMessage) {
 	for _, message := range messages {
 		b.client.Output() <- message
@@ -145,6 +152,7 @@ func (s *UserState) Update(mod, subscriber bool) {
 	s.Subscriber = subscriber
 }
 
+// AddChannel adds the channel to State
 func (b *Bot) AddChannel(channel string) {
 	s := b.State
 	s.mux.Lock()
@@ -155,6 +163,7 @@ func (b *Bot) AddChannel(channel string) {
 	}
 }
 
+// AddCapability adds the Capability to state
 func (b *Bot) AddCapability(capability twitch.Capability) {
 	s := b.State
 	if !b.HasCapability(capability) {
@@ -164,6 +173,7 @@ func (b *Bot) AddCapability(capability twitch.Capability) {
 	}
 }
 
+// HasCapability returns whether the capability exists within State
 func (b *Bot) HasCapability(capability twitch.Capability) bool {
 	b.State.mux.RLock()
 	defer b.State.mux.RUnlock()
@@ -175,6 +185,7 @@ func (b *Bot) HasCapability(capability twitch.Capability) bool {
 	return false
 }
 
+// UpdateUserState updates UserState for the given channel
 func (b *Bot) UpdateUserState(channel string, mod, subscriber bool) error {
 	s := b.State
 	s.mux.RLock()
@@ -187,6 +198,7 @@ func (b *Bot) UpdateUserState(channel string, mod, subscriber bool) error {
 	return nil
 }
 
+// UpdateChannel updates ChannelState for the provided channel
 func (b *Bot) UpdateChannel(channel string, emoteOnly, r9k, subscriber bool, follower, slow time.Duration) error {
 	s := b.State
 	s.mux.RLock()
@@ -199,6 +211,7 @@ func (b *Bot) UpdateChannel(channel string, emoteOnly, r9k, subscriber bool, fol
 	return nil
 }
 
+// RemoveChannel removes the channel from State
 func (b *Bot) RemoveChannel(channel string) {
 	s := b.State
 	s.mux.Lock()
@@ -206,6 +219,25 @@ func (b *Bot) RemoveChannel(channel string) {
 	delete(s.Channels, channel)
 }
 
+// Close closes the connection to IRC
 func (b *Bot) Close() error {
 	return b.client.Close()
+}
+
+// JoinChannel sends a Join message to IRC
+func (b *Bot) JoinChannel(channel string) {
+	b.Send(twitch.MakeJoinCommand(channel))
+}
+
+// RequestCapability sends Capability requests to IRC
+func (b *Bot) RequestCapability(capabilities ...twitch.Capability) {
+	for _, capability := range capabilities {
+		b.Send(twitch.MakeCapabilityRequest(capability))
+	}
+}
+
+// LeaveChannel sends a Part message to IRC & removes the channel from State
+func (b *Bot) LeaveChannel(channel string) {
+	b.Send(twitch.MakePartCommand(channel))
+	b.RemoveChannel(channel)
 }

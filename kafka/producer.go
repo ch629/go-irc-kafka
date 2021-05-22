@@ -24,7 +24,7 @@ type (
 	}
 )
 
-func NewDefaultProducer(kafkaConfig config.Kafka) (Producer, error) {
+func NewProducer(kafkaConfig config.Kafka) (Producer, error) {
 	saramaConfig := sarama.NewConfig()
 	brokers := kafkaConfig.Brokers
 	saramaConfig.Producer.Partitioner = sarama.NewRoundRobinPartitioner

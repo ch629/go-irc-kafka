@@ -27,6 +27,7 @@ type (
 		// Mod is whether the user is a Moderator
 		Mod bool
 		// Badges is the badges the user has assigned
+		// TODO: Should this be a map instead?
 		Badges []Badge
 	}
 
@@ -42,6 +43,9 @@ func NewBadge(name string) (b Badge, err error) {
 		return
 	}
 	split := strings.SplitN(name, "/", 2)
+	if len(split) < 2 {
+		return
+	}
 	b.Name = split[0]
 
 	b.Version, err = strconv.Atoi(split[1])
@@ -59,27 +63,26 @@ func NewBadges(name string) (b []Badge, err error) {
 	return
 }
 
-func MakeChatMessage(message parser.Message) (ChatMessage, error) {
-	var err error
+func MakeChatMessage(message parser.Message) (c ChatMessage, err error) {
 	tags := message.Tags
-	c := ChatMessage{
+	c = ChatMessage{
 		ChannelName: message.Params.Channel(),
 		UserName:    tags["display-name"],
 		Message:     message.Params[1],
 		Mod:         tags["mod"] == "1",
 	}
 	c.ID = uuid.MustParse(tags["id"])
-	t, err := strconv.Atoi(tags["tmi-sent-ts"])
+	ts, err := strconv.Atoi(tags["tmi-sent-ts"])
 	if err != nil {
-		return c, err
+		return
 	}
-	c.Time = time.Unix(0, int64(t*int(time.Millisecond)))
+	c.Time = time.Unix(0, int64(ts*int(time.Millisecond)))
 	if c.UserID, err = strconv.Atoi(tags["user-id"]); err != nil {
-		return c, err
+		return
 	}
 	if c.ChannelID, err = strconv.Atoi(tags["room-id"]); err != nil {
-		return c, err
+		return
 	}
 	c.Badges, err = NewBadges(tags["badges"])
-	return c, err
+	return
 }

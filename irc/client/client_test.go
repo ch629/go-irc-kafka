@@ -36,7 +36,7 @@ func (eofReadWriteCloser) Close() error {
 
 func Test_Input(t *testing.T) {
 	conn := MakeMockConn()
-	ircClient := NewDefaultClient(context.Background(), conn)
+	ircClient := NewClient(context.Background(), conn)
 	defer ircClient.Close()
 	io.WriteString(conn.ClientWriter, ":tmi.twitch.tv 001 thewolfpack :Welcome, GLHF!\r\n")
 
@@ -60,7 +60,7 @@ func Test_Input(t *testing.T) {
 
 func Test_Output(t *testing.T) {
 	conn := MakeMockConn()
-	ircClient := NewDefaultClient(context.Background(), conn)
+	ircClient := NewClient(context.Background(), conn)
 	defer ircClient.Close()
 	ircClient.Output() <- &stringMessage{"testing"}
 
@@ -75,7 +75,7 @@ func Test_Output(t *testing.T) {
 
 func TestNewDefaultClient_EOF(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	cli := NewDefaultClient(ctx, eofReadWriteCloser{})
+	cli := NewClient(ctx, eofReadWriteCloser{})
 	t.Cleanup(cancel)
 	select {
 	case <-cli.Done():

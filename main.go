@@ -15,7 +15,6 @@ import (
 	"github.com/ch629/go-irc-kafka/twitch"
 	"github.com/ch629/go-irc-kafka/twitch/inbound"
 	_ "github.com/dimiro1/banner/autoload"
-	structpb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/afero"
 	"go.uber.org/zap"
@@ -33,6 +32,18 @@ func main() {
 	}
 }
 
+func makeConnection(address string) (*net.TCPConn, error) {
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve TCP Addr %w", err)
+	}
+	conn, err := net.DialTCP("tcp", nil, tcpAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to Dial TCP %w", err)
+	}
+	return conn, nil
+}
+
 func startBot() error {
 	ctx := shutdown.InterruptAwareContext(context.Background())
 	graceful := &shutdown.GracefulShutdown{}
@@ -44,19 +55,15 @@ func startBot() error {
 		return err
 	}
 
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", conf.Irc.Address)
+	conn, err := makeConnection(conf.Irc.Address)
 	if err != nil {
-		return fmt.Errorf("failed to resolve TCP Addr %w", err)
-	}
-	conn, err := net.DialTCP("tcp", nil, tcpAddr)
-	if err != nil {
-		return fmt.Errorf("failed to Dial TCP %w", err)
+		return err
 	}
 
-	ircClient := client.NewDefaultClient(ctx, conn)
+	ircClient := client.NewClient(ctx, conn)
 	graceful.RegisterWait(ircClient)
 
-	producer, err := kafka.NewDefaultProducer(conf.Kafka)
+	producer, err := kafka.NewProducer(conf.Kafka)
 	if err != nil {
 		return fmt.Errorf("failed to create producer %w", err)
 	}
@@ -75,9 +82,9 @@ func startBot() error {
 		// 366 - End of MOTD -> Last message that is received after connecting to IRC
 		case irc.EndOfMOTD:
 			log.Debug("Ready to join channels")
-			bot.Send(twitch.MakeCapabilityRequest(twitch.TAGS), twitch.MakeCapabilityRequest(twitch.COMMANDS))
+			bot.RequestCapability(twitch.TAGS, twitch.COMMANDS)
 			for _, channel := range conf.Bot.Channels {
-				bot.Send(twitch.MakeJoinCommand(channel))
+				bot.JoinChannel(channel)
 			}
 		case irc.Capability:
 			if message.Params[1] == "ACK" {
@@ -129,7 +136,7 @@ func startBot() error {
 			switch messageId {
 			case "sub":
 				var sub inbound.SubTags
-				if err := mapstructure.Decode(message.Tags, &sub); err != nil {
+				if err = mapstructure.Decode(message.Tags, &sub); err != nil {
 					log.Error("failed to decode tags to sub", zap.Any("tags", message.Tags), zap.Error(err))
 				}
 				log.Info("User subscribed", zap.Any("tags", sub))
@@ -149,7 +156,7 @@ func startBot() error {
 		return nil
 	})
 	defer b.Close()
-	b.Send(twitch.MakePassCommand(conf.Bot.OAuth), twitch.MakeNickCommand(conf.Bot.Name))
+	b.Login(conf.Bot.Name, conf.Bot.OAuth)
 	graceful.Wait()
 	return nil
 }
@@ -164,18 +171,4 @@ func atoiOrDefault(v string, def int) (i int) {
 
 func seconds(s int) time.Duration {
 	return time.Duration(s) * time.Second
-}
-
-func makeStructFromMap(data map[string]string) *structpb.Struct {
-	structMap := make(map[string]*structpb.Value, len(data))
-	for k, v := range data {
-		structMap[k] = &structpb.Value{
-			Kind: &structpb.Value_StringValue{
-				StringValue: v,
-			},
-		}
-	}
-	return &structpb.Struct{
-		Fields: structMap,
-	}
 }

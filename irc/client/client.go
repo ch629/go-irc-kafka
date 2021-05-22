@@ -42,7 +42,7 @@ type (
 	}
 )
 
-func NewDefaultClient(ctx context.Context, conn io.ReadWriteCloser) IrcClient {
+func NewClient(ctx context.Context, conn io.ReadWriteCloser) IrcClient {
 	cli := &client{
 		conn:       conn,
 		inputChan:  make(chan parser.Message),
