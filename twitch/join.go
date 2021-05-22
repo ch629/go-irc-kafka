@@ -2,6 +2,7 @@ package twitch
 
 import (
 	"fmt"
+	"github.com/ch629/go-irc-kafka/irc"
 	"github.com/ch629/go-irc-kafka/irc/client"
 )
 
@@ -9,10 +10,10 @@ type JoinCommand struct {
 	Channel string
 }
 
-func (command *JoinCommand) Bytes() []byte {
-	return []byte(fmt.Sprintf("JOIN #%v", command.Channel))
+func (command JoinCommand) Bytes() []byte {
+	return []byte(fmt.Sprintf("%v #%v", irc.Join, command.Channel))
 }
 
 func MakeJoinCommand(channel string) client.IrcMessage {
-	return &JoinCommand{Channel: channel}
+	return JoinCommand{Channel: channel}
 }

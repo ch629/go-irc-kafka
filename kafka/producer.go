@@ -2,15 +2,18 @@ package kafka
 
 import (
 	"fmt"
-	"github.com/ch629/go-irc-kafka/config"
-	pb "github.com/ch629/go-irc-kafka/proto"
-
 	"github.com/Shopify/sarama"
+	"github.com/ch629/go-irc-kafka/config"
+	"github.com/ch629/go-irc-kafka/domain"
+	"github.com/ch629/go-irc-kafka/logging"
+	pb "github.com/ch629/go-irc-kafka/proto"
+	"github.com/golang/protobuf/ptypes"
+	"go.uber.org/zap"
 )
 
 type (
 	Producer interface {
-		Send(message *pb.ChatMessage)
+		Send(message domain.ChatMessage)
 		Close() error
 		Errors() <-chan *sarama.ProducerError
 	}
@@ -38,10 +41,37 @@ func NewDefaultProducer(kafkaConfig config.Kafka) (Producer, error) {
 	}, nil
 }
 
-func (producer *producer) Send(message *pb.ChatMessage) {
+func (producer *producer) Send(message domain.ChatMessage) {
+	ts, err := ptypes.TimestampProto(message.Time)
+	if err != nil {
+		logging.Logger().Warn("Failed to convert time to proto timestamp", zap.Error(err))
+		return
+	}
 	producer.Input() <- &sarama.ProducerMessage{
 		Topic: producer.topic,
-		Key:   sarama.StringEncoder(message.Channel),
-		Value: protoEncoder{message},
+		Key:   sarama.StringEncoder(message.ChannelName),
+		Value: protoEncoder{
+			&pb.ChatMessage{
+				Id:          message.ID.String(),
+				ChannelName: message.ChannelName,
+				UserName:    message.UserName,
+				Message:     message.Message,
+				Timestamp:   ts,
+				UserId:      uint32(message.UserID),
+				ChannelId:   uint32(message.ChannelID),
+				Badges:      mapBadges(message.Badges),
+			},
+		},
 	}
+}
+
+func mapBadges(badges []domain.Badge) []*pb.Badge {
+	b := make([]*pb.Badge, len(badges))
+	for i := range b {
+		b[i] = &pb.Badge{
+			Name:    badges[i].Name,
+			Version: uint32(badges[i].Version),
+		}
+	}
+	return b
 }

@@ -23,17 +23,41 @@ var (
 // https://ircv3.net/specs/extensions/message-tags.html
 // https://tools.ietf.org/html/rfc1459.html#section-2.3.1
 type (
+	Params []string
+	Prefix string
+	Tags   map[string]string
+
 	Scanner struct {
 		*bufio.Reader
 	}
 
 	Message struct {
-		Tags    map[string]string `json:"tags,omitempty"`
-		Prefix  string            `json:"prefix,omitempty"`
-		Command string            `json:"command"`
-		Params  []string          `json:"params,omitempty"`
+		Tags    Tags   `json:"tags,omitempty"`
+		Prefix  Prefix `json:"prefix,omitempty"`
+		Command string `json:"command"`
+		Params  Params `json:"params,omitempty"`
 	}
 )
+
+func (t Tags) GetOrDefault(key string, def string) (v string) {
+	var ok bool
+	if v, ok = t[key]; !ok {
+		v = def
+	}
+	return
+}
+
+func (t Tags) User() string {
+	return t.GetOrDefault("display-name", "")
+}
+
+func (p Prefix) User() string {
+	return strings.SplitN(string(p), "!", 2)[0]
+}
+
+func (p Params) Channel() string {
+	return p[0][1:]
+}
 
 func (m *Message) HasTags() bool {
 	return len(m.Tags) > 0
@@ -168,16 +192,16 @@ func (s *Scanner) readTags() (map[string]string, error) {
 	}
 }
 
-// TODO: Prefix struct?
 // readPrefix Reads the prefix BNF
-func (s *Scanner) readPrefix() (str string, err error) {
+func (s *Scanner) readPrefix() (pre Prefix, err error) {
+	var str string
 	if str, err = s.readUntil([]rune{' '}, []rune{}); err != nil {
 		return
 	}
 	if len(str) == 0 {
 		return "", ErrNoPrefix
 	}
-	return
+	return Prefix(str), nil
 }
 
 // readCommand Reads the command BNF

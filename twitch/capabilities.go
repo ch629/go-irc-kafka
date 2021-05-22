@@ -34,12 +34,12 @@ func CapabilityFromParam(param string) Capability {
 	}[param]
 }
 
-func (message *capabilityRequestMessage) Bytes() []byte {
+func (message capabilityRequestMessage) Bytes() []byte {
 	return []byte(fmt.Sprintf("CAP REQ :twitch.tv/%v", message.Capability.String()))
 }
 
 func MakeCapabilityRequest(capability Capability) client.IrcMessage {
-	return &capabilityRequestMessage{
+	return capabilityRequestMessage{
 		Capability: capability,
 	}
 }

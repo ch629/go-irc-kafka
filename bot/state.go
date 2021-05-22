@@ -20,39 +20,33 @@ type (
 		onMessage func(*Bot, parser.Message) error
 	}
 	State struct {
-		mux          sync.RWMutex
+		mux sync.RWMutex
+		// TODO: Should these be exported?
 		Channels     map[string]*Channel
 		Capabilities []twitch.Capability
 	}
 	Channel struct {
 		mux   sync.RWMutex
-		State *ChannelState
-		User  *UserState
+		State ChannelState
+		User  UserState
 	}
 	ChannelState struct {
-		mux            sync.RWMutex
-		EmoteOnly      bool
-		FollowerOnly   time.Duration
-		R9k            bool
-		Slow           time.Duration
-		SubscriberOnly bool
+		ChannelStateData
+		mux sync.RWMutex
 	}
 	UserState struct {
-		mux        sync.RWMutex
-		Mod        bool
-		Subscriber bool
+		UserStateData
+		mux sync.RWMutex
 	}
 
-	// TODO: Is this snapshot idea good? It means we don't have to hold onto locks if we just want to look at what
-	//  the channel data looks like at any given time
-	ChannelStateSnapshot struct {
+	ChannelStateData struct {
 		EmoteOnly      bool
 		FollowerOnly   time.Duration
 		R9k            bool
 		Slow           time.Duration
 		SubscriberOnly bool
 	}
-	UserStateSnapshot struct {
+	UserStateData struct {
 		Mod        bool
 		Subscriber bool
 	}
@@ -92,13 +86,16 @@ func (b *Bot) handleMessages() {
 	}
 }
 
-func (b Bot) Send(messages ...client.IrcMessage) {
+func (b *Bot) Send(messages ...client.IrcMessage) {
 	for _, message := range messages {
 		b.client.Output() <- message
 	}
 }
 
 func (s *ChannelState) Update(emoteOnly, r9k, subscriber bool, follower, slow time.Duration) {
+	if s == nil {
+		return
+	}
 	s.mux.Lock()
 	defer s.mux.Unlock()
 	s.EmoteOnly = emoteOnly
@@ -108,82 +105,107 @@ func (s *ChannelState) Update(emoteOnly, r9k, subscriber bool, follower, slow ti
 	s.Slow = slow
 }
 
-// TODO: Make these funcs run from a Bot instead of state?
-func (s *State) UpdateChannel(channel string, emoteOnly, r9k, subscriber bool, follower, slow time.Duration) {
-	logging.Logger().Info("Updating channel", zap.String("channel", channel))
-	s.mux.RLock()
-	defer s.mux.RUnlock()
-	s.Channels[channel].State.Update(emoteOnly, r9k, subscriber, follower, slow)
-}
-
-func (s *ChannelState) Snapshot() *ChannelStateSnapshot {
-	s.mux.RLock()
-	defer s.mux.RUnlock()
-	return &ChannelStateSnapshot{
-		EmoteOnly:      s.EmoteOnly,
-		FollowerOnly:   s.FollowerOnly,
-		R9k:            s.R9k,
-		Slow:           s.Slow,
-		SubscriberOnly: s.SubscriberOnly,
+func (s *ChannelState) Data() ChannelStateData {
+	if s == nil {
+		return ChannelStateData{}
 	}
-}
-
-func (s *UserState) Snapshot() UserStateSnapshot {
 	s.mux.RLock()
 	defer s.mux.RUnlock()
-	return UserStateSnapshot{
-		Mod:        s.Mod,
-		Subscriber: s.Subscriber,
-	}
+	return s.ChannelStateData
 }
 
-func (s *State) ReadChannelState(channel string) (*ChannelStateSnapshot, error) {
+func (s *UserState) Data() UserStateData {
+	if s == nil {
+		return UserStateData{}
+	}
+	s.mux.RLock()
+	defer s.mux.RUnlock()
+	return s.UserStateData
+}
+
+func (b *Bot) GetChannelData(channel string) (*ChannelStateData, error) {
+	s := b.State
 	s.mux.RLock()
 	defer s.mux.RUnlock()
 	ch, ok := s.Channels[channel]
 	if !ok {
 		return nil, ErrNotInChannel
 	}
-	return ch.State.Snapshot(), nil
-}
-
-func (s *State) AddCapability(capability twitch.Capability) {
-	s.mux.Lock()
-	defer s.mux.Unlock()
-	// TODO: Check duplicate
-	s.Capabilities = append(s.Capabilities, capability)
+	snap := ch.State.Data()
+	return &snap, nil
 }
 
 func (s *UserState) Update(mod, subscriber bool) {
+	if s == nil {
+		return
+	}
 	s.mux.Lock()
 	defer s.mux.Unlock()
 	s.Mod = mod
 	s.Subscriber = subscriber
 }
 
-func (s *State) UpdateUserState(channel string, mod, subscriber bool) {
-	s.mux.RLock()
-	defer s.mux.RUnlock()
-	s.Channels[channel].User.Update(mod, subscriber)
-}
-
-func (s *State) AddChannel(channel string) *Channel {
+func (b *Bot) AddChannel(channel string) {
+	s := b.State
 	s.mux.Lock()
 	defer s.mux.Unlock()
-	c := &Channel{
-		State: &ChannelState{},
-		User:  &UserState{},
+	s.Channels[channel] = &Channel{
+		State: ChannelState{},
+		User:  UserState{},
 	}
-	s.Channels[channel] = c
-	return c
 }
 
-func (s *State) RemoveChannel(channel string) {
+func (b *Bot) AddCapability(capability twitch.Capability) {
+	s := b.State
+	if !b.HasCapability(capability) {
+		s.mux.Lock()
+		defer s.mux.Unlock()
+		s.Capabilities = append(s.Capabilities, capability)
+	}
+}
+
+func (b *Bot) HasCapability(capability twitch.Capability) bool {
+	b.State.mux.RLock()
+	defer b.State.mux.RUnlock()
+	for _, c := range b.State.Capabilities {
+		if c == capability {
+			return true
+		}
+	}
+	return false
+}
+
+func (b *Bot) UpdateUserState(channel string, mod, subscriber bool) error {
+	s := b.State
+	s.mux.RLock()
+	defer s.mux.RUnlock()
+	c, ok := s.Channels[channel]
+	if !ok {
+		return ErrNotInChannel
+	}
+	c.User.Update(mod, subscriber)
+	return nil
+}
+
+func (b *Bot) UpdateChannel(channel string, emoteOnly, r9k, subscriber bool, follower, slow time.Duration) error {
+	s := b.State
+	s.mux.RLock()
+	defer s.mux.RUnlock()
+	c, ok := s.Channels[channel]
+	if !ok {
+		return ErrNotInChannel
+	}
+	c.State.Update(emoteOnly, r9k, subscriber, follower, slow)
+	return nil
+}
+
+func (b *Bot) RemoveChannel(channel string) {
+	s := b.State
 	s.mux.Lock()
 	defer s.mux.Unlock()
 	delete(s.Channels, channel)
 }
 
-func (b Bot) Close() error {
+func (b *Bot) Close() error {
 	return b.client.Close()
 }
