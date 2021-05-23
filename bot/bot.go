@@ -43,8 +43,6 @@ func (b *Bot) handleMessages() {
 			return
 		case msg := <-b.client.Input():
 			// TODO: Error channel
-			// TODO: Try to run these in a goroutine, might need a channel of updates otherwise we get nil
-			//  references with joining channels & then updating them
 			if err := b.onMessage(b, msg); err != nil {
 				logging.Logger().Error("Failed to handle message", zap.String("command", msg.Command), zap.Error(err))
 			}
@@ -54,11 +52,16 @@ func (b *Bot) handleMessages() {
 
 // Login sends the required messages to IRC to login
 func (b *Bot) Login(name, pass string) {
-	b.Send(twitch.MakePassCommand(pass), twitch.MakeNickCommand(name))
+	b.send(twitch.MakePassCommand(pass), twitch.MakeNickCommand(name))
 }
 
-// Send sends messages to IRC
-func (b *Bot) Send(messages ...client.IrcMessage) {
+// Pong sends a pong message back to the IRC server
+func (b *Bot) Pong(params parser.Params) {
+	b.send(twitch.MakePongCommand(params[0]))
+}
+
+// send sends messages to IRC
+func (b *Bot) send(messages ...client.IrcMessage) {
 	for _, message := range messages {
 		b.client.Output() <- message
 	}
@@ -91,7 +94,6 @@ func (b *Bot) AddChannel(channel string) {
 func (b *Bot) AddCapability(capability twitch.Capability) {
 	s := b.state
 	if !b.HasCapability(capability) {
-		// TODO: Should we be sharing the mutex for capabilities & channels?
 		s.capMux.Lock()
 		defer s.capMux.Unlock()
 		s.Capabilities = append(s.Capabilities, capability)
@@ -151,21 +153,22 @@ func (b *Bot) Close() error {
 
 // RequestJoinChannel sends a Join message to IRC
 func (b *Bot) RequestJoinChannel(channel string) {
-	b.Send(twitch.MakeJoinCommand(channel))
+	b.send(twitch.MakeJoinCommand(channel))
 }
 
 // RequestCapability sends Capability requests to IRC
 func (b *Bot) RequestCapability(capabilities ...twitch.Capability) {
 	for _, capability := range capabilities {
-		b.Send(twitch.MakeCapabilityRequest(capability))
+		b.send(twitch.MakeCapabilityRequest(capability))
 	}
 }
 
 // RequestLeaveChannel sends a Part message to IRC & removes the channel from State
 func (b *Bot) RequestLeaveChannel(channel string) {
-	b.Send(twitch.MakePartCommand(channel))
+	b.send(twitch.MakePartCommand(channel))
 }
 
+// InChannel returns whether the bot is in the given channel
 func (b *Bot) InChannel(channel string) bool {
 	_, ok := b.state.Channels[channel]
 	return ok

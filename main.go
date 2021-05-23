@@ -26,10 +26,14 @@ import (
 // https://tools.ietf.org/html/rfc1459.html
 
 func main() {
-	err := startBot()
+	ctx := shutdown.InterruptAwareContext(context.Background())
+	graceful := &shutdown.GracefulShutdown{}
+	b, err := startBot(ctx, graceful)
 	if err != nil {
 		logging.Logger().Fatal("Failed to start bot", zap.Error(err))
 	}
+	defer b.Close()
+	graceful.Wait()
 }
 
 func makeConnection(address string) (*net.TCPConn, error) {
@@ -44,20 +48,18 @@ func makeConnection(address string) (*net.TCPConn, error) {
 	return conn, nil
 }
 
-func startBot() error {
-	ctx := shutdown.InterruptAwareContext(context.Background())
-	graceful := &shutdown.GracefulShutdown{}
+func startBot(ctx context.Context, graceful *shutdown.GracefulShutdown) (*bot.Bot, error) {
 	fs := afero.NewOsFs()
 	log := logging.Logger()
 
 	conf, err := config.LoadConfig(fs)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	conn, err := makeConnection(conf.Irc.Address)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	ircClient := client.NewClient(ctx, conn)
@@ -65,7 +67,7 @@ func startBot() error {
 
 	producer, err := kafka.NewProducer(conf.Kafka)
 	if err != nil {
-		return fmt.Errorf("failed to create producer %w", err)
+		return nil, fmt.Errorf("failed to create producer %w", err)
 	}
 
 	go func() {
@@ -78,8 +80,7 @@ func startBot() error {
 		switch message.Command {
 		case irc.Ping:
 			log.Debug("Received PING")
-			bot.Send(twitch.MakePongCommand(message.Params[0]))
-		// 366 - End of MOTD -> Last message that is received after connecting to IRC
+			bot.Pong(message.Params)
 		case irc.EndOfMOTD:
 			log.Debug("Ready to join channels")
 			bot.RequestCapability(twitch.TAGS, twitch.COMMANDS)
@@ -112,13 +113,6 @@ func startBot() error {
 
 			if err = bot.UpdateChannel(channel, emoteOnly, r9k, subscriber, follower, slow); err != nil {
 				log.Warn("Failed to update channel", zap.String("channel", channel), zap.Error(err))
-			} else {
-				channelData, err := bot.GetChannelData(channel)
-				if err != nil {
-					log.Warn("Error getting channel data", zap.Error(err))
-				} else {
-					log.Info("Updated channel state", zap.String("channel", channel), zap.Any("state", channelData))
-				}
 			}
 		case irc.UserState:
 			channel := message.Params.Channel()
@@ -132,7 +126,6 @@ func startBot() error {
 			if err != nil {
 				log.Warn("Failed to make chat message", zap.Error(err))
 			}
-			log.Debug("PRIVMSG", zap.Any("message", msg))
 			producer.SendChatMessage(msg)
 		case irc.UserNotice:
 			// Sub, Resub etc
@@ -143,8 +136,6 @@ func startBot() error {
 				if err = mapstructure.Decode(message.Tags, &sub); err != nil {
 					log.Error("failed to decode tags to sub", zap.Any("tags", message.Tags), zap.Error(err))
 				}
-				log.Info("User subscribed", zap.Any("tags", sub))
-			//log.Info("User subscribed", zap.String("user", message.Tags.GetOrDefault("display-name", "")), zap.String("channel", message.Params.Channel()), zap.Any("params", message.Params))
 			default:
 				log.Info("User notice", zap.Any("message", message))
 			}
@@ -167,10 +158,8 @@ func startBot() error {
 		}
 		return nil
 	})
-	defer b.Close()
 	b.Login(conf.Bot.Name, conf.Bot.OAuth)
-	graceful.Wait()
-	return nil
+	return b, nil
 }
 
 func atoiOrDefault(v string, def int) (i int) {
