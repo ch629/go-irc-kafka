@@ -11,6 +11,7 @@ func init() {
 	conf := zap.NewDevelopmentConfig()
 	conf.OutputPaths = []string{"stdout"}
 	conf.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	conf.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
 	var err error
 	if logger, err = conf.Build(); err != nil {
 		panic(err)
