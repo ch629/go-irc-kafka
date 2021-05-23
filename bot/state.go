@@ -11,7 +11,7 @@ type (
 		chanMux sync.RWMutex
 		capMux  sync.RWMutex
 		// TODO: Should these be exported?
-		Channels     map[string]*Channel
+		Channels     map[string]Channel
 		Capabilities []twitch.Capability
 	}
 	Channel struct {

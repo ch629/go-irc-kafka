@@ -26,7 +26,7 @@ func NewBot(ctx context.Context, client client.IrcClient, onMessage func(bot *Bo
 	b := &Bot{
 		ctx: ctx,
 		state: &State{
-			Channels:     make(map[string]*Channel),
+			Channels:     make(map[string]Channel),
 			Capabilities: make([]twitch.Capability, 0),
 		},
 		client:    client,
@@ -84,10 +84,7 @@ func (b *Bot) AddChannel(channel string) {
 	s := b.state
 	s.chanMux.Lock()
 	defer s.chanMux.Unlock()
-	s.Channels[channel] = &Channel{
-		State: ChannelState{},
-		User:  UserState{},
-	}
+	s.Channels[channel] = Channel{}
 }
 
 // AddCapability adds the Capability to State
