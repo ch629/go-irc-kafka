@@ -11,23 +11,23 @@ type (
 		chanMux sync.RWMutex
 		capMux  sync.RWMutex
 		// TODO: Should these be exported?
-		Channels     map[string]Channel
+		Channels     map[string]*Channel
 		Capabilities []twitch.Capability
 	}
 	Channel struct {
-		State ChannelState
-		User  UserState
+		State *ChannelState `json:"state"`
+		User  *UserState    `json:"user"`
 	}
 	ChannelState struct {
-		EmoteOnly      bool
-		FollowerOnly   time.Duration
-		R9k            bool
-		Slow           time.Duration
-		SubscriberOnly bool
+		EmoteOnly      bool          `json:"emote_only"`
+		FollowerOnly   time.Duration `json:"follower_only"`
+		R9k            bool          `json:"r9k"`
+		Slow           time.Duration `json:"slow"`
+		SubscriberOnly bool          `json:"subscriber_only"`
 	}
 	UserState struct {
-		Mod        bool
-		Subscriber bool
+		Mod        bool `json:"mod,omitempty"`
+		Subscriber bool `json:"subscriber,omitempty"`
 	}
 )
 

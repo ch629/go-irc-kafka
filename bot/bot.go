@@ -26,7 +26,7 @@ func NewBot(ctx context.Context, client client.IrcClient, onMessage func(bot *Bo
 	b := &Bot{
 		ctx: ctx,
 		state: &State{
-			Channels:     make(map[string]Channel),
+			Channels:     make(map[string]*Channel),
 			Capabilities: make([]twitch.Capability, 0),
 		},
 		client:    client,
@@ -76,7 +76,7 @@ func (b *Bot) GetChannelData(channel string) (*ChannelState, error) {
 		return nil, ErrNotInChannel
 	}
 	data := ch.State
-	return &data, nil
+	return data, nil
 }
 
 // AddChannel adds the channel to State
@@ -84,7 +84,10 @@ func (b *Bot) AddChannel(channel string) {
 	s := b.state
 	s.chanMux.Lock()
 	defer s.chanMux.Unlock()
-	s.Channels[channel] = Channel{}
+	s.Channels[channel] = &Channel{
+		User:  &UserState{},
+		State: &ChannelState{},
+	}
 }
 
 // AddCapability adds the Capability to State
@@ -169,4 +172,24 @@ func (b *Bot) RequestLeaveChannel(channel string) {
 func (b *Bot) InChannel(channel string) bool {
 	_, ok := b.state.Channels[channel]
 	return ok
+}
+
+// Channels returns the names of the channels the Bot is in
+func (b *Bot) Channels() []string {
+	b.state.chanMux.RLock()
+	defer b.state.chanMux.RUnlock()
+	channels := make([]string, len(b.state.Channels))
+	i := 0
+	for key := range b.state.Channels {
+		channels[i] = key
+		i++
+	}
+	return channels
+}
+
+// Capabilities returns the capabilities given to the Bot
+func (b *Bot) Capabilities() []twitch.Capability {
+	b.state.capMux.RLock()
+	defer b.state.capMux.RUnlock()
+	return b.state.Capabilities
 }

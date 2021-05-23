@@ -6,6 +6,7 @@ require (
 	github.com/Shopify/sarama v1.29.0
 	github.com/dimiro1/banner v1.1.0
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
+	github.com/gin-gonic/gin v1.7.2
 	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.2.0
 	github.com/magiconair/properties v1.8.5 // indirect
@@ -18,6 +19,7 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.7.0
+	github.com/urfave/negroni v1.0.0
 	go.uber.org/multierr v1.7.0 // indirect
 	go.uber.org/zap v1.16.0
 	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a // indirect
