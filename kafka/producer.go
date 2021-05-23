@@ -71,13 +71,15 @@ func (producer *producer) SendBan(ban domain.Ban) {
 		logging.Logger().Warn("Failed to convert time to proto timestamp", zap.Error(err))
 		return
 	}
-	var banDur uint32
+	var banDur *uint32
 	if ban.BanDuration != nil {
-		banDur = uint32(ban.BanDuration.Truncate(time.Second).Seconds())
+		dur := uint32(ban.BanDuration.Truncate(time.Second).Seconds())
+		banDur = &dur
 	}
-	var messageId string
+	var messageId *string
 	if ban.TargetMessageID != nil {
-		messageId = ban.TargetMessageID.String()
+		id := ban.TargetMessageID.String()
+		messageId = &id
 	}
 	producer.Input() <- &sarama.ProducerMessage{
 		Topic: fmt.Sprintf("%s.bans", ban.ChannelName),

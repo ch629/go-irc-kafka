@@ -27,9 +27,9 @@ message Ban {
   string channelName = 3;
   string targetUserName = 4;
   google.protobuf.Timestamp timestamp = 5;
-  uint32 durationSeconds = 6;
+  optional uint32 durationSeconds = 6;
   bool permanent = 7;
-  string targetMessageId = 8;
+  optional string targetMessageId = 8;
 }
 
 //protoc -I=./proto --go_out=. ./proto/chatmessage.proto
