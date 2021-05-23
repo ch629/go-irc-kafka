@@ -84,7 +84,7 @@ func startBot() error {
 			log.Debug("Ready to join channels")
 			bot.RequestCapability(twitch.TAGS, twitch.COMMANDS)
 			for _, channel := range conf.Bot.Channels {
-				bot.JoinChannel(channel)
+				bot.RequestJoinChannel(channel)
 			}
 		case irc.Capability:
 			if message.Params[1] == "ACK" {
@@ -97,6 +97,10 @@ func startBot() error {
 			channel := message.Params.Channel()
 			bot.AddChannel(channel)
 			log.Info("Joined channel", zap.String("name", channel))
+		case irc.Part:
+			channel := message.Params.Channel()
+			bot.RemoveChannel(channel)
+			log.Info("Left channel", zap.String("name", channel))
 		case irc.RoomState:
 			tags := message.Tags
 			channel := message.Params.Channel()
@@ -113,7 +117,7 @@ func startBot() error {
 				if err != nil {
 					log.Warn("Error getting channel data", zap.Error(err))
 				} else {
-					log.Info("Updated channel state", zap.Any("state", channelData))
+					log.Info("Updated channel state", zap.String("channel", channel), zap.Any("state", channelData))
 				}
 			}
 		case irc.UserState:
@@ -129,7 +133,7 @@ func startBot() error {
 				log.Warn("Failed to make chat message", zap.Error(err))
 			}
 			log.Debug("PRIVMSG", zap.Any("message", msg))
-			producer.Send(msg)
+			producer.SendChatMessage(msg)
 		case irc.UserNotice:
 			// Sub, Resub etc
 			messageId := message.Tags.GetOrDefault("msg-id", "")
@@ -144,8 +148,16 @@ func startBot() error {
 			default:
 				log.Info("User notice", zap.Any("message", message))
 			}
-		case irc.ClearChat, irc.ClearMessage:
-			log.Info("Received", zap.String("command", message.Command), zap.Any("params", message.Params))
+		case irc.ClearChat:
+			ban, err := domain.NewBan(message)
+			if err != nil {
+				log.Warn("Error creating ban message", zap.Any("message", message), zap.Error(err))
+			} else {
+				producer.SendBan(ban)
+				log.Debug("User banned", zap.Any("ban", ban))
+			}
+		case irc.ClearMessage:
+			log.Info("Received", zap.String("command", message.Command), zap.Any("message", message))
 		case irc.Notice, irc.HostTarget:
 			log.Info("Received", zap.Any("message", message))
 		// Ignored messages

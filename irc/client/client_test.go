@@ -73,7 +73,7 @@ func Test_Output(t *testing.T) {
 	assert.Equal(t, "testing\r\n", line)
 }
 
-func TestNewDefaultClient_EOF(t *testing.T) {
+func TestNewClient_EOF(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cli := NewClient(ctx, eofReadWriteCloser{})
 	t.Cleanup(cancel)

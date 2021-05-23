@@ -18,7 +18,18 @@ message ChatMessage {
 
 message Badge {
   string name = 1;
-  uint32 version = 2;
+  string version = 2;
+}
+
+message Ban {
+  uint32 channelId = 1;
+  uint32 targetUserId = 2;
+  string channelName = 3;
+  string targetUserName = 4;
+  google.protobuf.Timestamp timestamp = 5;
+  uint32 durationSeconds = 6;
+  bool permanent = 7;
+  string targetMessageId = 8;
 }
 
 //protoc -I=./proto --go_out=. ./proto/chatmessage.proto

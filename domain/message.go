@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"github.com/ch629/go-irc-kafka/irc/parser"
 	"github.com/google/uuid"
 	"strconv"
@@ -33,26 +34,31 @@ type (
 
 	Badge struct {
 		Name    string
-		Version int
+		Version string
 	}
 )
 
+var (
+	ErrInvalidBadge = errors.New("badge provided was invalid")
+)
+
 func NewBadge(name string) (b Badge, err error) {
-	b = Badge{}
 	if len(name) == 0 {
 		return
 	}
 	split := strings.SplitN(name, "/", 2)
 	if len(split) < 2 {
-		return
+		return b, ErrInvalidBadge
 	}
 	b.Name = split[0]
-
-	b.Version, err = strconv.Atoi(split[1])
+	b.Version = split[1]
 	return
 }
 
 func NewBadges(name string) (b []Badge, err error) {
+	if len(name) == 0 {
+		return
+	}
 	split := strings.Split(name, ",")
 	b = make([]Badge, len(split))
 	for i := range b {
@@ -71,12 +77,12 @@ func MakeChatMessage(message parser.Message) (c ChatMessage, err error) {
 		Message:     message.Params[1],
 		Mod:         tags["mod"] == "1",
 	}
-	c.ID = uuid.MustParse(tags["id"])
-	ts, err := strconv.Atoi(tags["tmi-sent-ts"])
-	if err != nil {
+	if c.ID, err = uuid.Parse(tags["id"]); err != nil {
 		return
 	}
-	c.Time = time.Unix(0, int64(ts*int(time.Millisecond)))
+	if c.Time, err = timeFromTmiSentTs(tags); err != nil {
+		return
+	}
 	if c.UserID, err = strconv.Atoi(tags["user-id"]); err != nil {
 		return
 	}

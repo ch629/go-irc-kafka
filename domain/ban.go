@@ -1,0 +1,55 @@
+package domain
+
+import (
+	"github.com/ch629/go-irc-kafka/irc/parser"
+	"github.com/google/uuid"
+	"strconv"
+	"time"
+)
+
+type Ban struct {
+	BanDuration     *time.Duration `json:"ban_duration,omitempty"`
+	Permanent       bool           `json:"permanent"`
+	RoomID          int            `json:"room_id,omitempty"`
+	TargetMessageID *uuid.UUID     `json:"target_message_id,omitempty"`
+	Time            time.Time      `json:"time"`
+	TargetUserID    int            `json:"target_user_id,omitempty"`
+	ChannelName     string         `json:"channel_name,omitempty"`
+	UserName        string         `json:"user_name,omitempty"`
+}
+
+func NewBan(message parser.Message) (b Ban, err error) {
+	tags := message.Tags
+	b = Ban{
+		ChannelName: message.Params.Channel(),
+		UserName:    message.Params[1],
+	}
+	// Target message ID is optional
+	if msgId, hasMsgId := tags["target-msg-id"]; hasMsgId {
+		var id uuid.UUID
+		if id, err = uuid.Parse(msgId); err != nil {
+			return
+		}
+		b.TargetMessageID = &id
+	}
+	// Ban duration is optional, if not provided it's a permanent ban
+	if durString, hasDuration := tags["ban-duration"]; !hasDuration {
+		b.Permanent = true
+	} else {
+		var durSec int
+		durSec, err = strconv.Atoi(durString)
+		if err != nil {
+			return
+		}
+		dur := time.Duration(durSec) * time.Second
+		b.BanDuration = &dur
+	}
+	if b.RoomID, err = strconv.Atoi(tags["room-id"]); err != nil {
+		return
+	}
+	if b.Time, err = timeFromTmiSentTs(tags); err != nil {
+		return
+	}
+	b.TargetUserID, err = strconv.Atoi(tags["target-user-id"])
+	return
+}
