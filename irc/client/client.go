@@ -23,6 +23,7 @@ type (
 		Closed() bool
 		// Done is a channel to notify consumers when the client is done closing
 		Done() <-chan struct{}
+		Err() error
 	}
 
 	IrcMessage interface {
@@ -39,6 +40,7 @@ type (
 		scanner    parser.Scanner
 		wg         sync.WaitGroup
 		done       chan struct{}
+		err        error
 	}
 )
 
@@ -63,6 +65,10 @@ func NewClient(ctx context.Context, conn io.ReadWriteCloser) IrcClient {
 
 func (cli *client) Done() <-chan struct{} {
 	return cli.done
+}
+
+func (cli *client) Err() error {
+	return cli.err
 }
 
 // cleanup closes all channels once goroutines are finished
@@ -127,6 +133,7 @@ func (cli *client) readInput() {
 			err := message.Error
 			if err != nil {
 				if errors.Is(err, io.EOF) {
+					cli.err = err
 					cli.cancelFunc()
 					return
 				}

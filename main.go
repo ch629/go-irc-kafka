@@ -10,6 +10,7 @@ import (
 	"github.com/ch629/go-irc-kafka/logging"
 	"github.com/ch629/go-irc-kafka/middleware"
 	"github.com/ch629/go-irc-kafka/shutdown"
+	"github.com/ch629/go-irc-kafka/twitch"
 	_ "github.com/dimiro1/banner/autoload"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/afero"
@@ -17,6 +18,7 @@ import (
 	"go.uber.org/zap"
 	"net"
 	"net/http"
+	"time"
 )
 
 // https://tools.ietf.org/html/rfc1459.html
@@ -35,6 +37,9 @@ func main() {
 	defer server.Close()
 
 	graceful.Wait()
+	if b.Err() != nil {
+		log.Error("error in client", zap.Error(b.Err()))
+	}
 }
 
 func startHttpServer(b *bot.Bot, log *zap.Logger) *http.Server {
@@ -53,14 +58,44 @@ func startHttpServer(b *bot.Bot, log *zap.Logger) *http.Server {
 		}).
 		GET("/capability", func(c *gin.Context) {
 			c.JSON(http.StatusOK, b.Capabilities())
+		}).
+		DELETE("/channel/:channel", func(c *gin.Context) {
+			channel := c.Param("channel")
+			if b.InChannel(channel) {
+				b.RequestLeaveChannel(channel)
+				c.Status(http.StatusOK)
+				return
+			}
+			c.Status(http.StatusBadRequest)
+		}).
+		POST("/channel/:channel", func(c *gin.Context) {
+			channel := c.Param("channel")
+			if b.InChannel(channel) {
+				// TODO: Respond saying already in channel?
+				c.Status(http.StatusBadRequest)
+				return
+			}
+			b.RequestJoinChannel(channel)
+			c.Status(http.StatusOK)
+		}).
+		GET("/status", func(c *gin.Context) {
+			c.JSON(http.StatusOK, struct {
+				Channels     []string            `json:"channels"`
+				Capabilities []twitch.Capability `json:"capabilities"`
+			}{
+				Channels:     b.Channels(),
+				Capabilities: b.Capabilities(),
+			})
 		})
 	// TODO: Zap recovery
 	neg := negroni.New(middleware.NewLogger(log), negroni.NewRecovery())
 	neg.UseHandler(r)
 
 	server := &http.Server{
-		Addr:    ":8080",
-		Handler: neg,
+		Addr:         ":8080",
+		Handler:      neg,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
 	}
 	go server.ListenAndServe()
 	return server

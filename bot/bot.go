@@ -50,6 +50,10 @@ func (b *Bot) handleMessages() {
 	}
 }
 
+func (b *Bot) Err() error {
+	return b.client.Err()
+}
+
 // Login sends the required messages to IRC to login
 func (b *Bot) Login(name, pass string) {
 	b.send(twitch.MakePassCommand(pass), twitch.MakeNickCommand(name))
