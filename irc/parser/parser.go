@@ -39,7 +39,9 @@ type (
 	}
 )
 
-func (t Tags) GetOrDefault(key string, def string) (v string) {
+// TODO: Are these types & funcs actually useful?
+// TODO: Maybe map these into structs instead (in another package)?
+func (t Tags) GetOrDefault(key, def string) (v string) {
 	var ok bool
 	if v, ok = t[key]; !ok {
 		v = def
@@ -283,7 +285,7 @@ func (s *Scanner) readParamMiddle() (string, error) {
 // untilInclusive will consume the rune if it is found
 // untilExclusive will not consume the rune if it is found
 // returns ErrTooLong if too many runes have been read
-func (s *Scanner) readUntil(untilInclusive []rune, untilExclusive []rune) (string, error) {
+func (s *Scanner) readUntil(untilInclusive, untilExclusive []rune) (string, error) {
 	var contains = func(runes []rune, r rune) bool {
 		for _, u := range runes {
 			if r == u {

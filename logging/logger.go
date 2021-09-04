@@ -16,8 +16,5 @@ func init() {
 	if logger, err = conf.Build(); err != nil {
 		panic(err)
 	}
-}
-
-func Logger() *zap.Logger {
-	return logger
+	zap.ReplaceGlobals(logger)
 }

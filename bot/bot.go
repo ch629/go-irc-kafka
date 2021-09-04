@@ -3,21 +3,24 @@ package bot
 import (
 	"context"
 	"errors"
+	"time"
+
 	"github.com/ch629/go-irc-kafka/irc/client"
 	"github.com/ch629/go-irc-kafka/irc/parser"
-	"github.com/ch629/go-irc-kafka/logging"
 	"github.com/ch629/go-irc-kafka/twitch"
+
 	"go.uber.org/zap"
-	"time"
 )
 
 // Bot
 // TODO: Interface
+// TODO: This is one bot, but we should probably treat it as 1 per channel?
 type Bot struct {
 	ctx       context.Context
 	state     *State
 	client    client.IrcClient
 	onMessage func(*Bot, parser.Message) error
+	logger    *zap.Logger
 }
 
 var ErrNotInChannel = errors.New("not in channel")
@@ -44,7 +47,7 @@ func (b *Bot) handleMessages() {
 		case msg := <-b.client.Input():
 			// TODO: Error channel
 			if err := b.onMessage(b, msg); err != nil {
-				logging.Logger().Error("Failed to handle message", zap.String("command", msg.Command), zap.Error(err))
+				b.logger.Error("Failed to handle message", zap.String("command", msg.Command), zap.Error(err))
 			}
 		}
 	}
@@ -67,7 +70,7 @@ func (b *Bot) Pong(params parser.Params) {
 // send sends messages to IRC
 func (b *Bot) send(messages ...client.IrcMessage) {
 	for _, message := range messages {
-		b.client.Output() <- message
+		_ = b.client.Send(message)
 	}
 }
 

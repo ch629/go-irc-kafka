@@ -3,31 +3,32 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/http"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"github.com/ch629/go-irc-kafka/bot"
 	"github.com/ch629/go-irc-kafka/config"
 	"github.com/ch629/go-irc-kafka/irc/client"
 	"github.com/ch629/go-irc-kafka/kafka"
-	"github.com/ch629/go-irc-kafka/logging"
 	"github.com/ch629/go-irc-kafka/middleware"
-	"github.com/ch629/go-irc-kafka/shutdown"
 	"github.com/ch629/go-irc-kafka/twitch"
 	_ "github.com/dimiro1/banner/autoload"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/afero"
 	"github.com/urfave/negroni"
 	"go.uber.org/zap"
-	"net"
-	"net/http"
-	"time"
 )
 
 // https://tools.ietf.org/html/rfc1459.html
 
 func main() {
-	log := logging.Logger()
-	ctx := shutdown.InterruptAwareContext(context.Background())
-	graceful := &shutdown.GracefulShutdown{}
-	b, err := startBot(ctx, graceful)
+	log := zap.L()
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+	b, err := startBot(ctx)
 	if err != nil {
 		log.Fatal("Failed to start bot", zap.Error(err))
 	}
@@ -35,11 +36,7 @@ func main() {
 
 	server := startHttpServer(b, log)
 	defer server.Close()
-
-	graceful.Wait()
-	if b.Err() != nil {
-		log.Error("error in client", zap.Error(b.Err()))
-	}
+	<-ctx.Done()
 }
 
 func startHttpServer(b *bot.Bot, log *zap.Logger) *http.Server {
@@ -101,22 +98,35 @@ func startHttpServer(b *bot.Bot, log *zap.Logger) *http.Server {
 	return server
 }
 
-func startBot(ctx context.Context, graceful *shutdown.GracefulShutdown) (*bot.Bot, error) {
+func startBot(ctx context.Context) (*bot.Bot, error) {
 	fs := afero.NewOsFs()
-	log := logging.Logger()
+	log := zap.L()
 
 	conf, err := config.LoadConfig(fs)
 	if err != nil {
 		return nil, err
 	}
 
-	conn, err := makeConnection(conf.Irc.Address)
-	if err != nil {
-		return nil, err
+	var ircClient client.IrcClient
+	// Sometimes the client closes instantly, retry it 3 times
+	// TODO: Does this need to happen after attempting to login, or can we just base it from here?
+	for i := 0; i < 3; i++ {
+		conn, err := makeConnection(conf.Irc.Address)
+		if err != nil {
+			return nil, err
+		}
+		ircClient = client.NewClient(ctx, conn)
+		go ircClient.ConsumeMessages()
+		select {
+		case <-ircClient.Done():
+			// Make sure the connection is closed if we're retrying
+			conn.Close()
+			continue
+		// TODO: Can we just default?
+		case <-time.Tick(10 * time.Millisecond):
+		}
+		break
 	}
-
-	ircClient := client.NewClient(ctx, conn)
-	graceful.RegisterWait(ircClient)
 
 	producer, err := kafka.NewProducer(conf.Kafka)
 	if err != nil {
@@ -131,7 +141,7 @@ func startBot(ctx context.Context, graceful *shutdown.GracefulShutdown) (*bot.Bo
 
 	handler := botMessageHandler{
 		conf:     conf,
-		log:      logging.Logger(),
+		log:      log,
 		producer: producer,
 	}
 	b := bot.NewBot(ctx, ircClient, handler.handleMessage)

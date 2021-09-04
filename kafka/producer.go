@@ -5,10 +5,10 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/ch629/go-irc-kafka/config"
 	"github.com/ch629/go-irc-kafka/domain"
-	"github.com/ch629/go-irc-kafka/logging"
 	pb "github.com/ch629/go-irc-kafka/proto"
 	"github.com/golang/protobuf/ptypes"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 )
 
@@ -21,6 +21,7 @@ type (
 	}
 
 	producer struct {
+		logger *zap.Logger
 		sarama.AsyncProducer
 	}
 )
@@ -38,15 +39,12 @@ func NewProducer(kafkaConfig config.Kafka) (Producer, error) {
 
 	return &producer{
 		AsyncProducer: pro,
+		logger: zap.L(),
 	}, nil
 }
 
 func (producer *producer) SendChatMessage(message domain.ChatMessage) {
-	ts, err := ptypes.TimestampProto(message.Time)
-	if err != nil {
-		logging.Logger().Warn("Failed to convert time to proto timestamp", zap.Error(err))
-		return
-	}
+	ts := timestamppb.New(message.Time)
 	producer.Input() <- &sarama.ProducerMessage{
 		Topic: fmt.Sprintf("%s.chat", message.ChannelName),
 		Key:   sarama.StringEncoder(message.UserName),
@@ -68,7 +66,7 @@ func (producer *producer) SendChatMessage(message domain.ChatMessage) {
 func (producer *producer) SendBan(ban domain.Ban) {
 	ts, err := ptypes.TimestampProto(ban.Time)
 	if err != nil {
-		logging.Logger().Warn("Failed to convert time to proto timestamp", zap.Error(err))
+		producer.logger.Warn("Failed to convert time to proto timestamp", zap.Error(err))
 		return
 	}
 	var banDur *uint32
