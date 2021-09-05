@@ -1,6 +1,9 @@
 package main
 
 import (
+	"strconv"
+	"time"
+
 	"github.com/ch629/go-irc-kafka/bot"
 	"github.com/ch629/go-irc-kafka/config"
 	"github.com/ch629/go-irc-kafka/domain"
@@ -11,8 +14,6 @@ import (
 	"github.com/ch629/go-irc-kafka/twitch/inbound"
 	"github.com/mitchellh/mapstructure"
 	"go.uber.org/zap"
-	"strconv"
-	"time"
 )
 
 type botMessageHandler struct {

@@ -1,34 +1,37 @@
-syntax = "proto3";
+syntax = "proto2";
 
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
 
 option go_package = "./proto";
 
 message ChatMessage {
-  string id = 1;
-  string channelName = 2;
-  string userName = 3;
-  string message = 4;
-  google.protobuf.Timestamp timestamp = 5;
-  uint32 userId = 6;
-  uint32 channelId = 7;
-  bool mod = 8;
+  required string id = 1;
+  required string channelName = 2;
+  required string userName = 3;
+  required string message = 4;
+  required google.protobuf.Timestamp timestamp = 5;
+  required uint32 userId = 6;
+  required uint32 channelId = 7;
+  required bool mod = 8;
   repeated Badge badges = 9;
 }
 
 message Badge {
-  string name = 1;
-  string version = 2;
+  required string name = 1;
+  required string version = 2;
 }
 
+// TODO: Use gogoproto nullable instead of optional for proto3
+//  https://pkg.go.dev/github.com/gogo/protobuf/gogoproto?utm_source=godoc#hdr-More_Canonical_Go_Structures
 message Ban {
-  uint32 channelId = 1;
-  uint32 targetUserId = 2;
-  string channelName = 3;
-  string targetUserName = 4;
-  google.protobuf.Timestamp timestamp = 5;
-  optional uint32 durationSeconds = 6;
-  bool permanent = 7;
+  required uint32 channelId = 1;
+  required uint32 targetUserId = 2;
+  required string channelName = 3;
+  required string targetUserName = 4;
+  required google.protobuf.Timestamp timestamp = 5;
+  optional google.protobuf.Duration duration = 6;
+  required bool permanent = 7;
   optional string targetMessageId = 8;
 }
 

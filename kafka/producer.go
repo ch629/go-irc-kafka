@@ -2,27 +2,53 @@ package kafka
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/Shopify/sarama"
 	"github.com/ch629/go-irc-kafka/config"
 	"github.com/ch629/go-irc-kafka/domain"
-	pb "github.com/ch629/go-irc-kafka/proto"
-	"github.com/golang/protobuf/ptypes"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
-	"google.golang.org/protobuf/types/known/timestamppb"
-	"time"
 )
 
+//go:generate mockery --name=Producer
 type (
 	Producer interface {
-		SendChatMessage(message domain.ChatMessage)
-		SendBan(ban domain.Ban)
+		SendChatMessage(message domain.ChatMessage) error
+		SendBan(ban domain.Ban) error
 		Close() error
-		Errors() <-chan *sarama.ProducerError
 	}
 
 	producer struct {
 		logger *zap.Logger
-		sarama.AsyncProducer
+		sarama.SyncProducer
+	}
+
+	chatMessage struct {
+		ID          uuid.UUID `json:"id"`
+		ChannelName string    `json:"channel_name"`
+		UserName    string    `json:"user_name"`
+		Message     string    `json:"message"`
+		Timestamp   time.Time `json:"timestamp"`
+		UserID      int       `json:"user_id"`
+		ChannelID   int       `json:"channel_id"`
+		Badges      []badge   `json:"badges"`
+	}
+
+	badge struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+	}
+
+	banMessage struct {
+		ChannelID       int            `json:"channel_id"`
+		TargetUserID    int            `json:"target_user_id"`
+		ChannelName     string         `json:"channel_name"`
+		TargetUserName  string         `json:"target_user_name"`
+		Timestamp       time.Time      `json:"timestamp"`
+		Duration        *time.Duration `json:"duration,omitempty"`
+		Permanent       bool           `json:"permanent"`
+		TargetMessageID *uuid.UUID     `json:"target_message_id,omitempty"`
 	}
 )
 
@@ -31,78 +57,74 @@ func NewProducer(kafkaConfig config.Kafka) (Producer, error) {
 	brokers := kafkaConfig.Brokers
 	saramaConfig.Producer.Partitioner = sarama.NewRoundRobinPartitioner
 	saramaConfig.Producer.Compression = sarama.CompressionSnappy
+	saramaConfig.Producer.Return.Errors = true
 
-	pro, err := sarama.NewAsyncProducer(brokers, saramaConfig)
+	pro, err := sarama.NewSyncProducer(brokers, saramaConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create async kafka producer due to %w", err)
 	}
 
 	return &producer{
-		AsyncProducer: pro,
-		logger: zap.L(),
+		SyncProducer: pro,
+		logger:       zap.L(),
 	}, nil
 }
 
-func (producer *producer) SendChatMessage(message domain.ChatMessage) {
-	ts := timestamppb.New(message.Time)
-	producer.Input() <- &sarama.ProducerMessage{
+func (producer *producer) SendChatMessage(message domain.ChatMessage) error {
+	// TODO: Pull this into a map func
+	// TODO: Delete protobuf stuff
+	chatMessage := chatMessage{
+		ID:          message.ID,
+		ChannelName: message.ChannelName,
+		UserName:    message.UserName,
+		Message:     message.Message,
+		Timestamp:   message.Time,
+		UserID:      message.UserID,
+		ChannelID:   message.ChannelID,
+		Badges:      mapBadges(message.Badges),
+	}
+	enc, err := NewJsonEncoder(chatMessage)
+	if err != nil {
+		return err
+	}
+	_, _, err = producer.SendMessage(&sarama.ProducerMessage{
 		Topic: fmt.Sprintf("%s.chat", message.ChannelName),
 		Key:   sarama.StringEncoder(message.UserName),
-		Value: protoEncoder{
-			&pb.ChatMessage{
-				Id:          message.ID.String(),
-				ChannelName: message.ChannelName,
-				UserName:    message.UserName,
-				Message:     message.Message,
-				Timestamp:   ts,
-				UserId:      uint32(message.UserID),
-				ChannelId:   uint32(message.ChannelID),
-				Badges:      mapBadges(message.Badges),
-			},
-		},
-	}
+		Value: enc,
+	})
+	return err
 }
 
-func (producer *producer) SendBan(ban domain.Ban) {
-	ts, err := ptypes.TimestampProto(ban.Time)
+func (producer *producer) SendBan(ban domain.Ban) error {
+	// TODO: Pull this into a map func
+	banMessage := banMessage{
+		ChannelID:       ban.RoomID,
+		TargetUserID:    ban.TargetUserID,
+		ChannelName:     ban.ChannelName,
+		TargetUserName:  ban.UserName,
+		Timestamp:       ban.Time,
+		Duration:        ban.BanDuration,
+		Permanent:       ban.Permanent,
+		TargetMessageID: ban.TargetMessageID,
+	}
+	enc, err := NewJsonEncoder(banMessage)
 	if err != nil {
-		producer.logger.Warn("Failed to convert time to proto timestamp", zap.Error(err))
-		return
+		return err
 	}
-	var banDur *uint32
-	if ban.BanDuration != nil {
-		dur := uint32(ban.BanDuration.Truncate(time.Second).Seconds())
-		banDur = &dur
-	}
-	var messageId *string
-	if ban.TargetMessageID != nil {
-		id := ban.TargetMessageID.String()
-		messageId = &id
-	}
-	producer.Input() <- &sarama.ProducerMessage{
+	_, _, err = producer.SendMessage(&sarama.ProducerMessage{
 		Topic: fmt.Sprintf("%s.bans", ban.ChannelName),
 		Key:   sarama.StringEncoder(ban.UserName),
-		Value: protoEncoder{
-			&pb.Ban{
-				ChannelId:       uint32(ban.RoomID),
-				TargetUserId:    uint32(ban.TargetUserID),
-				ChannelName:     ban.ChannelName,
-				TargetUserName:  ban.UserName,
-				Timestamp:       ts,
-				DurationSeconds: banDur,
-				Permanent:       ban.Permanent,
-				TargetMessageId: messageId,
-			},
-		},
-	}
+		Value: enc,
+	})
+	return err
 }
 
-func mapBadges(badges []domain.Badge) []*pb.Badge {
-	b := make([]*pb.Badge, len(badges))
-	for i, badge := range badges {
-		b[i] = &pb.Badge{
-			Name:    badge.Name,
-			Version: badge.Version,
+func mapBadges(badges []domain.Badge) []badge {
+	b := make([]badge, len(badges))
+	for i, domainBadge := range badges {
+		b[i] = badge{
+			Name:    domainBadge.Name,
+			Version: domainBadge.Version,
 		}
 	}
 	return b

@@ -25,6 +25,7 @@ type Bot struct {
 
 var ErrNotInChannel = errors.New("not in channel")
 
+// TODO: Should this be directly coupled to client.IrcClient, or just pulls from a <-chan IrcMessage?
 func NewBot(ctx context.Context, client client.IrcClient, onMessage func(bot *Bot, message parser.Message) error) *Bot {
 	b := &Bot{
 		ctx: ctx,
@@ -35,6 +36,7 @@ func NewBot(ctx context.Context, client client.IrcClient, onMessage func(bot *Bo
 		client:    client,
 		onMessage: onMessage,
 	}
+	// TODO: Should this be ran on creation, or manually, afterwards?
 	go b.handleMessages()
 	return b
 }

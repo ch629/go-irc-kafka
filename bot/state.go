@@ -1,9 +1,10 @@
 package bot
 
 import (
-	"github.com/ch629/go-irc-kafka/twitch"
 	"sync"
 	"time"
+
+	"github.com/ch629/go-irc-kafka/twitch"
 )
 
 type (

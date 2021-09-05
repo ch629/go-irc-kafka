@@ -39,6 +39,7 @@ func main() {
 	<-ctx.Done()
 }
 
+// TODO: Move this somewhere else
 func startHttpServer(b *bot.Bot, log *zap.Logger) *http.Server {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
@@ -98,20 +99,12 @@ func startHttpServer(b *bot.Bot, log *zap.Logger) *http.Server {
 	return server
 }
 
-func startBot(ctx context.Context) (*bot.Bot, error) {
-	fs := afero.NewOsFs()
+func makeIrcClient(ctx context.Context, address string) (ircClient client.IrcClient, err error) {
 	log := zap.L()
-
-	conf, err := config.LoadConfig(fs)
-	if err != nil {
-		return nil, err
-	}
-
-	var ircClient client.IrcClient
 	// Sometimes the client closes instantly, retry it 3 times
 	// TODO: Does this need to happen after attempting to login, or can we just base it from here?
 	for i := 0; i < 3; i++ {
-		conn, err := makeConnection(conf.Irc.Address)
+		conn, err := makeConnection(address)
 		if err != nil {
 			return nil, err
 		}
@@ -119,6 +112,8 @@ func startBot(ctx context.Context) (*bot.Bot, error) {
 		go ircClient.ConsumeMessages()
 		select {
 		case <-ircClient.Done():
+			err = ircClient.Err()
+			log.Warn("IrcClient exited on startup", zap.Error(err))
 			// Make sure the connection is closed if we're retrying
 			conn.Close()
 			continue
@@ -128,16 +123,30 @@ func startBot(ctx context.Context) (*bot.Bot, error) {
 		break
 	}
 
+	if err != nil {
+		err = fmt.Errorf("failed to create IrcClient after retries: %w", err)
+	}
+	return
+}
+
+func startBot(ctx context.Context) (*bot.Bot, error) {
+	fs := afero.NewOsFs()
+	log := zap.L()
+
+	conf, err := config.LoadConfig(fs)
+	if err != nil {
+		return nil, err
+	}
+
+	ircClient, err := makeIrcClient(ctx, conf.Irc.Address)
+	if err != nil {
+		return nil, err
+	}
+
 	producer, err := kafka.NewProducer(conf.Kafka)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create producer %w", err)
 	}
-
-	go func() {
-		for err := range producer.Errors() {
-			log.Error("error from producer", zap.Error(err))
-		}
-	}()
 
 	handler := botMessageHandler{
 		conf:     conf,

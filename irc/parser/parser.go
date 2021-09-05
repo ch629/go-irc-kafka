@@ -69,8 +69,8 @@ func (m *Message) HasPrefix() bool {
 	return len(m.Prefix) > 0
 }
 
-func NewScanner(r io.Reader) *Scanner {
-	return &Scanner{
+func NewScanner(r io.Reader) Scanner {
+	return Scanner{
 		Reader: bufio.NewReader(r),
 	}
 }

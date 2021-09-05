@@ -50,7 +50,7 @@ func NewClient(ctx context.Context, conn io.ReadWriteCloser) IrcClient {
 		inputChan: make(chan parser.Message),
 		errorChan: make(chan error),
 		done:      make(chan struct{}),
-		scanner:   *parser.NewScanner(conn),
+		scanner:   parser.NewScanner(conn),
 	}
 	cli.ctx, cli.cancelFunc = context.WithCancel(ctx)
 
@@ -134,7 +134,7 @@ func (cli *client) readInput() {
 					cli.cancelFunc()
 					return
 				}
-				// TODO: Write error to chan?
+				cli.error(err)
 				continue
 			}
 			msg := *message.Message
@@ -145,7 +145,10 @@ func (cli *client) readInput() {
 
 func (cli *client) error(err error) {
 	if err != nil && !cli.Closed() {
-		cli.errorChan <- err
+		select {
+		case cli.errorChan <- err:
+		default:
+		}
 	}
 }
 
