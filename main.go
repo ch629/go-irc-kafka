@@ -13,6 +13,7 @@ import (
 	"github.com/ch629/go-irc-kafka/config"
 	"github.com/ch629/go-irc-kafka/irc/client"
 	"github.com/ch629/go-irc-kafka/kafka"
+	_ "github.com/ch629/go-irc-kafka/logging"
 	"github.com/ch629/go-irc-kafka/middleware"
 	"github.com/ch629/go-irc-kafka/twitch"
 	_ "github.com/dimiro1/banner/autoload"
@@ -37,6 +38,7 @@ func main() {
 	server := startHttpServer(b, log)
 	defer server.Close()
 	<-ctx.Done()
+	log.Info("closing")
 }
 
 // TODO: Move this somewhere else

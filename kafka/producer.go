@@ -58,6 +58,7 @@ func NewProducer(kafkaConfig config.Kafka) (Producer, error) {
 	saramaConfig.Producer.Partitioner = sarama.NewRoundRobinPartitioner
 	saramaConfig.Producer.Compression = sarama.CompressionSnappy
 	saramaConfig.Producer.Return.Errors = true
+	saramaConfig.Producer.Return.Successes = true
 
 	pro, err := sarama.NewSyncProducer(brokers, saramaConfig)
 	if err != nil {
@@ -72,7 +73,6 @@ func NewProducer(kafkaConfig config.Kafka) (Producer, error) {
 
 func (producer *producer) SendChatMessage(message domain.ChatMessage) error {
 	// TODO: Pull this into a map func
-	// TODO: Delete protobuf stuff
 	chatMessage := chatMessage{
 		ID:          message.ID,
 		ChannelName: message.ChannelName,
