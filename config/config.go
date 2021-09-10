@@ -1,11 +1,12 @@
 package config
 
 import (
+	"io"
+	"sync"
+
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
-	"io"
-	"sync"
 )
 
 type (

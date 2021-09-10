@@ -2,203 +2,116 @@ package bot
 
 import (
 	"context"
-	"errors"
-	"time"
+	"fmt"
 
+	"github.com/ch629/go-irc-kafka/domain"
+	"github.com/ch629/go-irc-kafka/irc"
 	"github.com/ch629/go-irc-kafka/irc/client"
 	"github.com/ch629/go-irc-kafka/irc/parser"
 	"github.com/ch629/go-irc-kafka/twitch"
-
 	"go.uber.org/zap"
 )
 
-// Bot
-// TODO: Interface
-// TODO: This is one bot, but we should probably treat it as 1 per channel?
+//go:generate mockery --name=IRCReadWriter
+type IRCReadWriter interface {
+	// TODO: can we decouple this from parser & client?
+	Input() <-chan parser.Message
+	Send(messages ...client.IrcMessage) error
+}
+
+// TODO: Need some sort of channel to mark when we're ready to send messages to IRC
 type Bot struct {
-	ctx       context.Context
-	state     *State
-	client    client.IrcClient
-	onMessage func(*Bot, parser.Message) error
-	logger    *zap.Logger
+	ircReadWriter  IRCReadWriter
+	errors         chan error
+	messageHandler MessageHandler
 }
 
-var ErrNotInChannel = errors.New("not in channel")
-
-// TODO: Should this be directly coupled to client.IrcClient, or just pulls from a <-chan IrcMessage?
-func NewBot(ctx context.Context, client client.IrcClient, onMessage func(bot *Bot, message parser.Message) error) *Bot {
-	b := &Bot{
-		ctx: ctx,
-		state: &State{
-			Channels:     make(map[string]*Channel),
-			Capabilities: make([]twitch.Capability, 0),
-		},
-		client:    client,
-		onMessage: onMessage,
+func New(irc IRCReadWriter, messageHandler MessageHandler) *Bot {
+	return &Bot{
+		// TODO: Potentially this could only take a PONG function which is needed for this level in the bot?
+		//  -> If we decide to have auto joining & logging in, we need to expose those
+		//  -> Depends on our boundaries of what a "Bot" is, does it handle sending messages back to IRC, or is this
+		//     just a reader bot which can pull messages & handles keeping it alive with something else which abstracts
+		//     away from sending messages back to the client
+		ircReadWriter:  irc,
+		errors:         make(chan error),
+		messageHandler: messageHandler,
 	}
-	// TODO: Should this be ran on creation, or manually, afterwards?
-	go b.handleMessages()
-	return b
 }
 
-func (b *Bot) handleMessages() {
+// TODO: Pass some config into this? -> Auto join channels on ready,
+func (b *Bot) ProcessMessages(ctx context.Context) {
+	log := zap.L()
+	// TODO: This is assuming we'll only ever call this in 1 goroutine
+	defer close(b.errors)
 	for {
 		select {
-		case <-b.ctx.Done():
-			return
-		case msg := <-b.client.Input():
-			// TODO: Error channel
-			if err := b.onMessage(b, msg); err != nil {
-				b.logger.Error("Failed to handle message", zap.String("command", msg.Command), zap.Error(err))
+		case message, ok := <-b.ircReadWriter.Input():
+			// Channel has closed
+			if !ok {
+				return
 			}
+			switch message.Command {
+			case irc.Ping:
+				if err := b.ircReadWriter.Send(twitch.MakePongCommand(message.Params[0])); err != nil {
+					b.errors <- fmt.Errorf("failed to send PONG: %w", err)
+				}
+			case irc.PrivateMessage:
+				msg, err := domain.MakeChatMessage(message)
+				if err != nil {
+					b.errors <- fmt.Errorf("failed to map chat message %w", err)
+					continue
+				}
+
+				if b.messageHandler.onPrivateMessage != nil {
+					b.messageHandler.onPrivateMessage(*msg)
+				}
+			case irc.ClearChat:
+				ban, err := domain.NewBan(message)
+				if err != nil {
+					b.errors <- fmt.Errorf("failed to map ban message %w", err)
+					continue
+				}
+				if b.messageHandler.onBan != nil {
+					b.messageHandler.onBan(*ban)
+				}
+			// Ignored messages
+			case "001", "002", "003", "004", "375", "372", "353", "366":
+			default:
+				log.Info("received unhandled command", zap.String("command", message.Command), zap.String("message", fmt.Sprintf("%+v", message)))
+			}
+		case <-ctx.Done():
+			return
 		}
 	}
 }
 
-func (b *Bot) Err() error {
-	return b.client.Err()
-}
-
-// Login sends the required messages to IRC to login
+// TODO: return err
+// TODO: Do we just run this on process messages if not already logged in?
+// TODO: Move this into the irc client?
+// TODO: Request capabilities
 func (b *Bot) Login(name, pass string) {
-	b.send(twitch.MakePassCommand(pass), twitch.MakeNickCommand(name))
+	b.ircReadWriter.Send(twitch.MakePassCommand(pass), twitch.MakeNickCommand(name))
 }
 
-// Pong sends a pong message back to the IRC server
-func (b *Bot) Pong(params parser.Params) {
-	b.send(twitch.MakePongCommand(params[0]))
-}
-
-// send sends messages to IRC
-func (b *Bot) send(messages ...client.IrcMessage) {
-	for _, message := range messages {
-		_ = b.client.Send(message)
-	}
-}
-
-func (b *Bot) GetChannelData(channel string) (*ChannelState, error) {
-	s := b.state
-	s.chanMux.RLock()
-	defer s.chanMux.RUnlock()
-	ch, ok := s.Channels[channel]
-	if !ok {
-		return nil, ErrNotInChannel
-	}
-	data := ch.State
-	return data, nil
-}
-
-// AddChannel adds the channel to State
-func (b *Bot) AddChannel(channel string) {
-	s := b.state
-	s.chanMux.Lock()
-	defer s.chanMux.Unlock()
-	s.Channels[channel] = &Channel{
-		User:  &UserState{},
-		State: &ChannelState{},
-	}
-}
-
-// AddCapability adds the Capability to State
-func (b *Bot) AddCapability(capability twitch.Capability) {
-	s := b.state
-	if !b.HasCapability(capability) {
-		s.capMux.Lock()
-		defer s.capMux.Unlock()
-		s.Capabilities = append(s.Capabilities, capability)
-	}
-}
-
-// HasCapability returns whether the capability exists within State
-func (b *Bot) HasCapability(capability twitch.Capability) bool {
-	b.state.capMux.RLock()
-	defer b.state.capMux.RUnlock()
-	for _, c := range b.state.Capabilities {
-		if c == capability {
-			return true
+func (b *Bot) JoinChannels(channels ...string) error {
+	for _, ch := range channels {
+		if err := b.ircReadWriter.Send(twitch.MakeJoinCommand(ch)); err != nil {
+			return err
 		}
 	}
-	return false
-}
-
-// UpdateUserState updates UserState for the given channel
-func (b *Bot) UpdateUserState(channel string, mod, subscriber bool) error {
-	s := b.state
-	s.chanMux.RLock()
-	defer s.chanMux.RUnlock()
-	c, ok := s.Channels[channel]
-	if !ok {
-		return ErrNotInChannel
-	}
-	c.User.Update(mod, subscriber)
 	return nil
 }
 
-// UpdateChannel updates ChannelState for the provided channel
-func (b *Bot) UpdateChannel(channel string, emoteOnly, r9k, subscriber bool, follower, slow time.Duration) error {
-	s := b.state
-	s.chanMux.RLock()
-	defer s.chanMux.RUnlock()
-	c, ok := s.Channels[channel]
-	if !ok {
-		return ErrNotInChannel
-	}
-	c.State.Update(emoteOnly, r9k, subscriber, follower, slow)
-	return nil
-}
-
-// RemoveChannel removes the channel from State
-func (b *Bot) RemoveChannel(channel string) {
-	s := b.state
-	s.chanMux.Lock()
-	defer s.chanMux.Unlock()
-	delete(s.Channels, channel)
-}
-
-// Close closes the connection to IRC
-func (b *Bot) Close() error {
-	return b.client.Close()
-}
-
-// RequestJoinChannel sends a Join message to IRC
-func (b *Bot) RequestJoinChannel(channel string) {
-	b.send(twitch.MakeJoinCommand(channel))
-}
-
-// RequestCapability sends Capability requests to IRC
-func (b *Bot) RequestCapability(capabilities ...twitch.Capability) {
+func (b *Bot) RequestCapability(capabilities ...twitch.Capability) error {
 	for _, capability := range capabilities {
-		b.send(twitch.MakeCapabilityRequest(capability))
+		if err := b.ircReadWriter.Send(twitch.MakeCapabilityRequest(capability)); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-// RequestLeaveChannel sends a Part message to IRC & removes the channel from State
-func (b *Bot) RequestLeaveChannel(channel string) {
-	b.send(twitch.MakePartCommand(channel))
-}
-
-// InChannel returns whether the bot is in the given channel
-func (b *Bot) InChannel(channel string) bool {
-	_, ok := b.state.Channels[channel]
-	return ok
-}
-
-// Channels returns the names of the channels the Bot is in
-func (b *Bot) Channels() []string {
-	b.state.chanMux.RLock()
-	defer b.state.chanMux.RUnlock()
-	channels := make([]string, len(b.state.Channels))
-	i := 0
-	for key := range b.state.Channels {
-		channels[i] = key
-		i++
-	}
-	return channels
-}
-
-// Capabilities returns the capabilities given to the Bot
-func (b *Bot) Capabilities() []twitch.Capability {
-	b.state.capMux.RLock()
-	defer b.state.capMux.RUnlock()
-	return b.state.Capabilities
+func (b *Bot) Errors() <-chan error {
+	return b.errors
 }

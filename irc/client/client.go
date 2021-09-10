@@ -17,7 +17,7 @@ type (
 		// Input is a channel of messages coming from IRC
 		Input() <-chan parser.Message
 		// Send sends the IrcMessage to the IRC client
-		Send(message IrcMessage) error
+		Send(message ...IrcMessage) error
 		// Errors is a channel of errors generated when reading or writing to IRC
 		Errors() <-chan error
 		// Closed is whether the client connection is closed
@@ -63,9 +63,14 @@ func (cli *client) ConsumeMessages() {
 	cli.readInput()
 }
 
-func (cli *client) Send(message IrcMessage) error {
-	_, err := cli.conn.Write(append(message.Bytes(), '\r', '\n'))
-	return err
+func (cli *client) Send(messages ...IrcMessage) error {
+	for _, msg := range messages {
+		// TODO: Retry?
+		if _, err := cli.conn.Write(append(msg.Bytes(), '\r', '\n')); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (cli *client) Err() error {

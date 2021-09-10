@@ -2,11 +2,13 @@ package domain
 
 import (
 	"errors"
-	"github.com/ch629/go-irc-kafka/irc/parser"
-	"github.com/google/uuid"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ch629/go-irc-kafka/irc/parser"
+	"github.com/google/uuid"
 )
 
 type (
@@ -38,9 +40,7 @@ type (
 	}
 )
 
-var (
-	ErrInvalidBadge = errors.New("badge provided was invalid")
-)
+var ErrInvalidBadge = errors.New("badge provided was invalid")
 
 func NewBadge(name string) (b Badge, err error) {
 	if len(name) == 0 {
@@ -69,26 +69,31 @@ func NewBadges(name string) (b []Badge, err error) {
 	return
 }
 
-func MakeChatMessage(message parser.Message) (c ChatMessage, err error) {
+// TODO: Should we be wrapping the lower level errors in this?
+// TODO: Handle if we don't get these tags, should only happen if we don't request for capabilities
+func MakeChatMessage(message parser.Message) (*ChatMessage, error) {
 	tags := message.Tags
-	c = ChatMessage{
+	var err error
+	c := &ChatMessage{
 		ChannelName: message.Params.Channel(),
 		UserName:    tags["display-name"],
 		Message:     message.Params[1],
 		Mod:         tags["mod"] == "1",
 	}
 	if c.ID, err = uuid.Parse(tags["id"]); err != nil {
-		return
+		return nil, fmt.Errorf("unable to parse ID into uuid: %w", err)
 	}
 	if c.Time, err = timeFromTmiSentTs(tags); err != nil {
-		return
+		return nil, fmt.Errorf("unable to convert time from timestamp: %w", err)
 	}
 	if c.UserID, err = strconv.Atoi(tags["user-id"]); err != nil {
-		return
+		return nil, fmt.Errorf("unable to convert user-id into int: %w", err)
 	}
 	if c.ChannelID, err = strconv.Atoi(tags["room-id"]); err != nil {
-		return
+		return nil, fmt.Errorf("unable to convert room-id into int: %w", err)
 	}
-	c.Badges, err = NewBadges(tags["badges"])
-	return
+	if c.Badges, err = NewBadges(tags["badges"]); err != nil {
+		return nil, fmt.Errorf("failed to create badges from tags: %w", err)
+	}
+	return c, err
 }

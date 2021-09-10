@@ -85,7 +85,6 @@ func (s *Scanner) Scan() (*Message, error) {
 	}
 
 	r, err := s.peekRune()
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to peek rune due to %w", err)
 	}
@@ -222,7 +221,6 @@ func (s *Scanner) readParams() ([]string, error) {
 	params := make([]string, 0)
 	for {
 		r, err := s.peekRune()
-
 		if err != nil {
 			return nil, fmt.Errorf("failed to peek rune due to %w", err)
 		}
@@ -239,7 +237,6 @@ func (s *Scanner) readParams() ([]string, error) {
 			// Consume :
 			s.consume()
 			trailing, err := s.readParamTrailing()
-
 			if err != nil {
 				return nil, fmt.Errorf("failed to read trailing param due to %w", err)
 			}
@@ -249,7 +246,6 @@ func (s *Scanner) readParams() ([]string, error) {
 		}
 
 		middle, err := s.readParamMiddle()
-
 		if err != nil {
 			return nil, fmt.Errorf("failed to read param middle due to %w", err)
 		}
@@ -286,7 +282,7 @@ func (s *Scanner) readParamMiddle() (string, error) {
 // untilExclusive will not consume the rune if it is found
 // returns ErrTooLong if too many runes have been read
 func (s *Scanner) readUntil(untilInclusive, untilExclusive []rune) (string, error) {
-	var contains = func(runes []rune, r rune) bool {
+	contains := func(runes []rune, r rune) bool {
 		for _, u := range runes {
 			if r == u {
 				return true
