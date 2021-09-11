@@ -15,12 +15,10 @@ import (
 
 //go:generate mockery --name=IRCReadWriter
 type IRCReadWriter interface {
-	// TODO: can we decouple this from parser & client?
 	Input() <-chan parser.Message
 	Send(messages ...client.IrcMessage) error
 }
 
-// TODO: Need some sort of channel to mark when we're ready to send messages to IRC
 type Bot struct {
 	ircReadWriter  IRCReadWriter
 	errors         chan error
@@ -32,18 +30,12 @@ var ErrBadPassword = errors.New("")
 
 func New(irc IRCReadWriter, messageHandler MessageHandler) *Bot {
 	return &Bot{
-		// TODO: Potentially this could only take a PONG function which is needed for this level in the bot?
-		//  -> If we decide to have auto joining & logging in, we need to expose those
-		//  -> Depends on our boundaries of what a "Bot" is, does it handle sending messages back to IRC, or is this
-		//     just a reader bot which can pull messages & handles keeping it alive with something else which abstracts
-		//     away from sending messages back to the client
 		ircReadWriter:  irc,
 		errors:         make(chan error),
 		messageHandler: messageHandler,
 	}
 }
 
-// TODO: Pass some config into this? -> Auto join channels on ready,
 func (b *Bot) ProcessMessages(ctx context.Context) {
 	log := zap.L()
 	// TODO: This is assuming we'll only ever call this in 1 goroutine

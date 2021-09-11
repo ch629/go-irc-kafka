@@ -72,17 +72,7 @@ func NewProducer(kafkaConfig config.Kafka) (Producer, error) {
 }
 
 func (producer *producer) SendChatMessage(message domain.ChatMessage) error {
-	// TODO: Pull this into a map func
-	chatMessage := chatMessage{
-		ID:          message.ID,
-		ChannelName: message.ChannelName,
-		UserName:    message.UserName,
-		Message:     message.Message,
-		Timestamp:   message.Time,
-		UserID:      message.UserID,
-		ChannelID:   message.ChannelID,
-		Badges:      mapBadges(message.Badges),
-	}
+	chatMessage := mapChatMessage(message)
 	enc, err := NewJsonEncoder(chatMessage)
 	if err != nil {
 		return err
@@ -96,17 +86,7 @@ func (producer *producer) SendChatMessage(message domain.ChatMessage) error {
 }
 
 func (producer *producer) SendBan(ban domain.Ban) error {
-	// TODO: Pull this into a map func
-	banMessage := banMessage{
-		ChannelID:       ban.RoomID,
-		TargetUserID:    ban.TargetUserID,
-		ChannelName:     ban.ChannelName,
-		TargetUserName:  ban.UserName,
-		Timestamp:       ban.Time,
-		Duration:        ban.BanDuration,
-		Permanent:       ban.Permanent,
-		TargetMessageID: ban.TargetMessageID,
-	}
+	banMessage := mapBan(ban)
 	enc, err := NewJsonEncoder(banMessage)
 	if err != nil {
 		return err
@@ -119,6 +99,19 @@ func (producer *producer) SendBan(ban domain.Ban) error {
 	return err
 }
 
+func mapChatMessage(message domain.ChatMessage) chatMessage {
+	return chatMessage{
+		ID:          message.ID,
+		ChannelName: message.ChannelName,
+		UserName:    message.UserName,
+		Message:     message.Message,
+		Timestamp:   message.Time,
+		UserID:      message.UserID,
+		ChannelID:   message.ChannelID,
+		Badges:      mapBadges(message.Badges),
+	}
+}
+
 func mapBadges(badges []domain.Badge) []badge {
 	b := make([]badge, len(badges))
 	for i, domainBadge := range badges {
@@ -128,4 +121,17 @@ func mapBadges(badges []domain.Badge) []badge {
 		}
 	}
 	return b
+}
+
+func mapBan(ban domain.Ban) banMessage {
+	return banMessage{
+		ChannelID:       ban.RoomID,
+		TargetUserID:    ban.TargetUserID,
+		ChannelName:     ban.ChannelName,
+		TargetUserName:  ban.UserName,
+		Timestamp:       ban.Time,
+		Duration:        ban.BanDuration,
+		Permanent:       ban.Permanent,
+		TargetMessageID: ban.TargetMessageID,
+	}
 }

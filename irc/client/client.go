@@ -9,7 +9,6 @@ import (
 )
 
 type (
-	// TODO: Store somewhere why it was closed so we can attempt to reconnect if it was just disconnected
 	IrcClient interface {
 		io.Closer
 		// ConsumeMessages reads the bytes from the connection & parses them, writing to the input channel

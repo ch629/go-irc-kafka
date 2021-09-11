@@ -47,10 +47,11 @@ func main() {
 	messageHandler := &bot.MessageHandler{}
 
 	messageHandler.OnPrivateMessage(func(msg domain.ChatMessage) {
-		log.Info("received private message", zap.Any("msg", msg))
+		log.Debug("received private message", zap.Any("msg", msg))
 		producer.SendChatMessage(msg)
 	})
 	messageHandler.OnBan(func(ban domain.Ban) {
+		log.Debug("received ban message", zap.Any("msg", ban))
 		producer.SendBan(ban)
 	})
 
@@ -83,7 +84,7 @@ func main() {
 func makeIrcClient(ctx context.Context, address string) (ircClient client.IrcClient, err error) {
 	log := zap.L()
 	// Sometimes the client closes instantly, retry it 3 times
-	// TODO: Does this need to happen after attempting to login, or can we just base it from here?
+	// TODO: Do we still need this?
 	for i := 0; i < 3; i++ {
 		conn, err := makeConnection(address)
 		if err != nil {
@@ -98,7 +99,6 @@ func makeIrcClient(ctx context.Context, address string) (ircClient client.IrcCli
 			// Make sure the connection is closed if we're retrying
 			conn.Close()
 			continue
-		// TODO: Can we just default?
 		case <-time.After(10 * time.Millisecond):
 		}
 		break
