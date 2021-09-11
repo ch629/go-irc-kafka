@@ -65,10 +65,11 @@ func main() {
 
 	go bot.ProcessMessages(ctx)
 	log.Info("processing messages")
+	if err := bot.Login(ctx, conf.Bot.Name, conf.Bot.OAuth); err != nil {
+		log.Fatal("error when logging in", zap.Error(err))
+	}
+	log.Info("logged in successfully")
 
-	// TODO: Use some ready channel instead of sleeping for 1s
-	<-time.After(1 * time.Second)
-	bot.Login(conf.Bot.Name, conf.Bot.OAuth)
 	if err := bot.RequestCapability(twitch.COMMANDS, twitch.MEMBERSHIP, twitch.TAGS); err != nil {
 		log.Fatal("failed to request capabilities", zap.Error(err))
 	}

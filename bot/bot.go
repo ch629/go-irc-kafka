@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/ch629/go-irc-kafka/domain"
@@ -24,7 +25,10 @@ type Bot struct {
 	ircReadWriter  IRCReadWriter
 	errors         chan error
 	messageHandler MessageHandler
+	loginError     chan error
 }
+
+var ErrBadPassword = errors.New("")
 
 func New(irc IRCReadWriter, messageHandler MessageHandler) *Bot {
 	return &Bot{
@@ -75,6 +79,12 @@ func (b *Bot) ProcessMessages(ctx context.Context) {
 				if b.messageHandler.onBan != nil {
 					b.messageHandler.onBan(*ban)
 				}
+			case irc.EndOfMOTD:
+				// Connected & ready to join channels
+				b.loginError <- nil
+			// ERR_PASSWDMISMATCH
+			case irc.ErrPasswordMismatch:
+				b.loginError <- ErrBadPassword
 			// Ignored messages
 			case "001", "002", "003", "004", "375", "372", "353", "366":
 			default:
@@ -86,12 +96,22 @@ func (b *Bot) ProcessMessages(ctx context.Context) {
 	}
 }
 
-// TODO: return err
-// TODO: Do we just run this on process messages if not already logged in?
-// TODO: Move this into the irc client?
-// TODO: Request capabilities
-func (b *Bot) Login(name, pass string) {
-	b.ircReadWriter.Send(twitch.MakePassCommand(pass), twitch.MakeNickCommand(name))
+// Login logs into the IRC server using the name and password, blocking until either the login was successful, fails or the context is cancelled
+func (b *Bot) Login(ctx context.Context, name, pass string) error {
+	b.loginError = make(chan error)
+	defer close(b.loginError)
+	if err := b.ircReadWriter.Send(twitch.MakePassCommand(pass), twitch.MakeNickCommand(name)); err != nil {
+		return err
+	}
+	select {
+	case err := <-b.loginError:
+		if err != nil {
+			return err
+		}
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return nil
 }
 
 func (b *Bot) JoinChannels(channels ...string) error {

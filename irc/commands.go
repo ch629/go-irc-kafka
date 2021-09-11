@@ -28,4 +28,10 @@ const (
 
 	Capability     = "CAP"
 	PrivateMessage = "PRIVMSG"
+
+	// Errors
+
+	// ERR_PASSWDMISMATCH
+	// TODO: Mappings from IRC error codes to go errors
+	ErrPasswordMismatch = "464"
 )
