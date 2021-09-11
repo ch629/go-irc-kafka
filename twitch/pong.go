@@ -2,6 +2,7 @@ package twitch
 
 import (
 	"fmt"
+
 	"github.com/ch629/go-irc-kafka/irc"
 	"github.com/ch629/go-irc-kafka/irc/client"
 )

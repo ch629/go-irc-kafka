@@ -3,140 +3,111 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"github.com/ch629/go-irc-kafka/bot"
 	"github.com/ch629/go-irc-kafka/config"
+	"github.com/ch629/go-irc-kafka/domain"
 	"github.com/ch629/go-irc-kafka/irc/client"
 	"github.com/ch629/go-irc-kafka/kafka"
-	"github.com/ch629/go-irc-kafka/logging"
-	"github.com/ch629/go-irc-kafka/middleware"
-	"github.com/ch629/go-irc-kafka/shutdown"
+	_ "github.com/ch629/go-irc-kafka/logging"
 	"github.com/ch629/go-irc-kafka/twitch"
 	_ "github.com/dimiro1/banner/autoload"
-	"github.com/gin-gonic/gin"
 	"github.com/spf13/afero"
-	"github.com/urfave/negroni"
 	"go.uber.org/zap"
-	"net"
-	"net/http"
-	"time"
 )
 
 // https://tools.ietf.org/html/rfc1459.html
 
 func main() {
-	log := logging.Logger()
-	ctx := shutdown.InterruptAwareContext(context.Background())
-	graceful := &shutdown.GracefulShutdown{}
-	b, err := startBot(ctx, graceful)
-	if err != nil {
-		log.Fatal("Failed to start bot", zap.Error(err))
-	}
-	defer b.Close()
+	log := zap.L()
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
 
-	server := startHttpServer(b, log)
-	defer server.Close()
-
-	graceful.Wait()
-	if b.Err() != nil {
-		log.Error("error in client", zap.Error(b.Err()))
-	}
-}
-
-func startHttpServer(b *bot.Bot, log *zap.Logger) *http.Server {
-	gin.SetMode(gin.ReleaseMode)
-	r := gin.New()
-	r.
-		GET("/channel/:channel", func(c *gin.Context) {
-			chanData, err := b.GetChannelData(c.Param("channel"))
-			if err != nil {
-				c.AbortWithError(http.StatusNotFound, err)
-			}
-			c.JSON(http.StatusOK, chanData)
-		}).
-		GET("/channel", func(c *gin.Context) {
-			c.JSON(http.StatusOK, b.Channels())
-		}).
-		GET("/capability", func(c *gin.Context) {
-			c.JSON(http.StatusOK, b.Capabilities())
-		}).
-		DELETE("/channel/:channel", func(c *gin.Context) {
-			channel := c.Param("channel")
-			if b.InChannel(channel) {
-				b.RequestLeaveChannel(channel)
-				c.Status(http.StatusOK)
-				return
-			}
-			c.Status(http.StatusBadRequest)
-		}).
-		POST("/channel/:channel", func(c *gin.Context) {
-			channel := c.Param("channel")
-			if b.InChannel(channel) {
-				// TODO: Respond saying already in channel?
-				c.Status(http.StatusBadRequest)
-				return
-			}
-			b.RequestJoinChannel(channel)
-			c.Status(http.StatusOK)
-		}).
-		GET("/status", func(c *gin.Context) {
-			c.JSON(http.StatusOK, struct {
-				Channels     []string            `json:"channels"`
-				Capabilities []twitch.Capability `json:"capabilities"`
-			}{
-				Channels:     b.Channels(),
-				Capabilities: b.Capabilities(),
-			})
-		})
-	// TODO: Zap recovery
-	neg := negroni.New(middleware.NewLogger(log), negroni.NewRecovery())
-	neg.UseHandler(r)
-
-	server := &http.Server{
-		Addr:         ":8080",
-		Handler:      neg,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	}
-	go server.ListenAndServe()
-	return server
-}
-
-func startBot(ctx context.Context, graceful *shutdown.GracefulShutdown) (*bot.Bot, error) {
 	fs := afero.NewOsFs()
-	log := logging.Logger()
 
 	conf, err := config.LoadConfig(fs)
 	if err != nil {
-		return nil, err
+		log.Fatal("failed to load config", zap.Error(err))
 	}
 
-	conn, err := makeConnection(conf.Irc.Address)
+	ircClient, err := makeIrcClient(ctx, conf.Irc.Address)
 	if err != nil {
-		return nil, err
+		log.Fatal("failed to make irc client", zap.Error(err))
 	}
-
-	ircClient := client.NewClient(ctx, conn)
-	graceful.RegisterWait(ircClient)
 
 	producer, err := kafka.NewProducer(conf.Kafka)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create producer %w", err)
+		log.Fatal("failed to create producer", zap.Error(err))
 	}
 
+	messageHandler := &bot.MessageHandler{}
+
+	messageHandler.OnPrivateMessage(func(msg domain.ChatMessage) {
+		log.Debug("received private message", zap.Any("msg", msg))
+		producer.SendChatMessage(msg)
+	})
+	messageHandler.OnBan(func(ban domain.Ban) {
+		log.Debug("received ban message", zap.Any("msg", ban))
+		producer.SendBan(ban)
+	})
+
+	bot := bot.New(ircClient, *messageHandler)
+	log.Info("created bot")
+
 	go func() {
-		for err := range producer.Errors() {
-			log.Error("error from producer", zap.Error(err))
+		for err := range bot.Errors() {
+			log.Error("err from bot", zap.Error(err))
 		}
 	}()
 
-	handler := botMessageHandler{
-		conf:     conf,
-		log:      logging.Logger(),
-		producer: producer,
+	go bot.ProcessMessages(ctx)
+	log.Info("processing messages")
+	if err := bot.Login(ctx, conf.Bot.Name, conf.Bot.OAuth); err != nil {
+		log.Fatal("error when logging in", zap.Error(err))
 	}
-	b := bot.NewBot(ctx, ircClient, handler.handleMessage)
-	b.Login(conf.Bot.Name, conf.Bot.OAuth)
-	return b, nil
+	log.Info("logged in successfully")
+
+	if err := bot.RequestCapability(twitch.COMMANDS, twitch.MEMBERSHIP, twitch.TAGS); err != nil {
+		log.Fatal("failed to request capabilities", zap.Error(err))
+	}
+	if err := bot.JoinChannels(conf.Bot.Channels...); err != nil {
+		log.Fatal("failed to join channels", zap.Error(err))
+	}
+	<-ctx.Done()
+	log.Info("closing")
+}
+
+func makeIrcClient(ctx context.Context, address string) (ircClient client.IrcClient, err error) {
+	log := zap.L()
+	// Sometimes the client closes instantly, retry it 3 times
+	// TODO: Do we still need this?
+	for i := 0; i < 3; i++ {
+		conn, err := makeConnection(address)
+		if err != nil {
+			return nil, err
+		}
+		ircClient = client.NewClient(ctx, conn)
+		go ircClient.ConsumeMessages()
+		select {
+		case <-ircClient.Done():
+			err = ircClient.Err()
+			log.Warn("IrcClient exited on startup", zap.Error(err))
+			// Make sure the connection is closed if we're retrying
+			conn.Close()
+			continue
+		case <-time.After(10 * time.Millisecond):
+		}
+		break
+	}
+
+	if err != nil {
+		err = fmt.Errorf("failed to create IrcClient after retries: %w", err)
+	}
+	return
 }
 
 func makeConnection(address string) (*net.TCPConn, error) {

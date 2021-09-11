@@ -1,9 +1,10 @@
 package domain
 
 import (
-	"github.com/ch629/go-irc-kafka/irc/parser"
 	"strconv"
 	"time"
+
+	"github.com/ch629/go-irc-kafka/irc/parser"
 )
 
 func timeFromTmiSentTs(tags parser.Tags) (time.Time, error) {

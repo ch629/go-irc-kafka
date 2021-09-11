@@ -39,7 +39,9 @@ type (
 	}
 )
 
-func (t Tags) GetOrDefault(key string, def string) (v string) {
+// TODO: Are these types & funcs actually useful?
+// TODO: Maybe map these into structs instead (in another package)?
+func (t Tags) GetOrDefault(key, def string) (v string) {
 	var ok bool
 	if v, ok = t[key]; !ok {
 		v = def
@@ -67,8 +69,8 @@ func (m *Message) HasPrefix() bool {
 	return len(m.Prefix) > 0
 }
 
-func NewScanner(r io.Reader) *Scanner {
-	return &Scanner{
+func NewScanner(r io.Reader) Scanner {
+	return Scanner{
 		Reader: bufio.NewReader(r),
 	}
 }
@@ -83,7 +85,6 @@ func (s *Scanner) Scan() (*Message, error) {
 	}
 
 	r, err := s.peekRune()
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to peek rune due to %w", err)
 	}
@@ -220,7 +221,6 @@ func (s *Scanner) readParams() ([]string, error) {
 	params := make([]string, 0)
 	for {
 		r, err := s.peekRune()
-
 		if err != nil {
 			return nil, fmt.Errorf("failed to peek rune due to %w", err)
 		}
@@ -237,7 +237,6 @@ func (s *Scanner) readParams() ([]string, error) {
 			// Consume :
 			s.consume()
 			trailing, err := s.readParamTrailing()
-
 			if err != nil {
 				return nil, fmt.Errorf("failed to read trailing param due to %w", err)
 			}
@@ -247,7 +246,6 @@ func (s *Scanner) readParams() ([]string, error) {
 		}
 
 		middle, err := s.readParamMiddle()
-
 		if err != nil {
 			return nil, fmt.Errorf("failed to read param middle due to %w", err)
 		}
@@ -283,8 +281,8 @@ func (s *Scanner) readParamMiddle() (string, error) {
 // untilInclusive will consume the rune if it is found
 // untilExclusive will not consume the rune if it is found
 // returns ErrTooLong if too many runes have been read
-func (s *Scanner) readUntil(untilInclusive []rune, untilExclusive []rune) (string, error) {
-	var contains = func(runes []rune, r rune) bool {
+func (s *Scanner) readUntil(untilInclusive, untilExclusive []rune) (string, error) {
+	contains := func(runes []rune, r rune) bool {
 		for _, u := range runes {
 			if r == u {
 				return true

@@ -1,12 +1,13 @@
 package domain
 
 import (
-	"github.com/ch629/go-irc-kafka/irc/parser"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/ch629/go-irc-kafka/irc/parser"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewBan(t *testing.T) {

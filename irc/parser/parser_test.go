@@ -29,7 +29,6 @@ func Test_ScanSmall(t *testing.T) {
 			" trailing ",
 		},
 	}, msg)
-
 }
 
 func Test_ScanPrefix1(t *testing.T) {

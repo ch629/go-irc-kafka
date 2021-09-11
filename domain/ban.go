@@ -1,10 +1,12 @@
 package domain
 
 import (
-	"github.com/ch629/go-irc-kafka/irc/parser"
-	"github.com/google/uuid"
+	"fmt"
 	"strconv"
 	"time"
+
+	"github.com/ch629/go-irc-kafka/irc/parser"
+	"github.com/google/uuid"
 )
 
 type Ban struct {
@@ -18,9 +20,11 @@ type Ban struct {
 	UserName        string         `json:"user_name,omitempty"`
 }
 
-func NewBan(message parser.Message) (b Ban, err error) {
+// TODO: Should we be wrapping the lower level errors in this?
+func NewBan(message parser.Message) (*Ban, error) {
 	tags := message.Tags
-	b = Ban{
+	var err error
+	b := &Ban{
 		ChannelName: message.Params.Channel(),
 		UserName:    message.Params[1],
 	}
@@ -28,7 +32,7 @@ func NewBan(message parser.Message) (b Ban, err error) {
 	if msgId, hasMsgId := tags["target-msg-id"]; hasMsgId {
 		var id uuid.UUID
 		if id, err = uuid.Parse(msgId); err != nil {
-			return
+			return nil, fmt.Errorf("failed to parse message id as uuid: %w", err)
 		}
 		b.TargetMessageID = &id
 	}
@@ -39,17 +43,19 @@ func NewBan(message parser.Message) (b Ban, err error) {
 		var durSec int
 		durSec, err = strconv.Atoi(durString)
 		if err != nil {
-			return
+			return nil, fmt.Errorf("failed to parse duration as seconds int: %w", err)
 		}
 		dur := time.Duration(durSec) * time.Second
 		b.BanDuration = &dur
 	}
 	if b.RoomID, err = strconv.Atoi(tags["room-id"]); err != nil {
-		return
+		return nil, fmt.Errorf("failed to parse room-id as int: %w", err)
 	}
 	if b.Time, err = timeFromTmiSentTs(tags); err != nil {
-		return
+		return nil, fmt.Errorf("failed to parse timestamp as time: %w", err)
 	}
-	b.TargetUserID, err = strconv.Atoi(tags["target-user-id"])
-	return
+	if b.TargetUserID, err = strconv.Atoi(tags["target-user-id"]); err != nil {
+		return nil, fmt.Errorf("failed to parse target user id as int: %w", err)
+	}
+	return b, nil
 }
