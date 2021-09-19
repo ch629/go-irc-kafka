@@ -37,6 +37,6 @@ func TestNewBan(t *testing.T) {
 			TargetUserID:    3,
 			ChannelName:     "channel",
 			UserName:        "user",
-		}, b)
+		}, *b)
 	})
 }

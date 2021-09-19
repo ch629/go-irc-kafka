@@ -93,6 +93,6 @@ func TestMakeChatMessage(t *testing.T) {
 			ChannelID:   2,
 			Mod:         true,
 			Badges:      []Badge{{"subscriber", "3"}},
-		}, chatMessage)
+		}, *chatMessage)
 	})
 }

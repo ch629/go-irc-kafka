@@ -39,7 +39,7 @@ func Test_Input(t *testing.T) {
 	ircClient := NewClient(context.Background(), conn)
 	defer ircClient.Close()
 	go ircClient.ConsumeMessages()
-	io.WriteString(conn.ClientWriter, ":tmi.twitch.tv 001 thewolfpack :Welcome, GLHF!\r\n")
+	_, _ = io.WriteString(conn.ClientWriter, ":tmi.twitch.tv 001 thewolfpack :Welcome, GLHF!\r\n")
 
 	select {
 	case msg := <-ircClient.Input():
@@ -68,7 +68,7 @@ func Test_Output(t *testing.T) {
 	go consumeErrors(ircClient)
 	go consumeInput(ircClient)
 
-	go ircClient.Send(&stringMessage{"testing"})
+	go func() { _ = ircClient.Send(&stringMessage{"testing"}) }()
 
 	reader := bufio.NewReader(conn.ClientReader)
 	line, err := reader.ReadString('\n')

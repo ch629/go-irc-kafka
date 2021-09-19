@@ -48,11 +48,15 @@ func main() {
 
 	messageHandler.OnPrivateMessage(func(msg domain.ChatMessage) {
 		log.Debug("received private message", zap.Any("msg", msg))
-		producer.SendChatMessage(msg)
+		if err := producer.SendChatMessage(msg); err != nil {
+			log.Warn("failed to send chat message", zap.Error(err))
+		}
 	})
 	messageHandler.OnBan(func(ban domain.Ban) {
 		log.Debug("received ban message", zap.Any("msg", ban))
-		producer.SendBan(ban)
+		if err := producer.SendBan(ban); err != nil {
+			log.Warn("failed ot send ban message", zap.Error(err))
+		}
 	})
 
 	bot := bot.New(ircClient, *messageHandler)
