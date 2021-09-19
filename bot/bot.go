@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/ch629/go-irc-kafka/domain"
 	"github.com/ch629/go-irc-kafka/irc"
@@ -24,20 +25,25 @@ type Bot struct {
 	errors         chan error
 	messageHandler MessageHandler
 	loginError     chan error
+	logger         *zap.Logger
+
+	loginMux  sync.Mutex
+	loggingIn bool
 }
 
-var ErrBadPassword = errors.New("")
+var ErrBadPassword = errors.New("bad password")
 
 func New(irc IRCReadWriter, messageHandler MessageHandler) *Bot {
 	return &Bot{
 		ircReadWriter:  irc,
 		errors:         make(chan error),
 		messageHandler: messageHandler,
+		logger:         zap.L(),
 	}
 }
 
 func (b *Bot) ProcessMessages(ctx context.Context) {
-	log := zap.L()
+	log := b.logger
 	// TODO: This is assuming we'll only ever call this in 1 goroutine
 	defer close(b.errors)
 	for {
@@ -53,30 +59,36 @@ func (b *Bot) ProcessMessages(ctx context.Context) {
 					b.errors <- fmt.Errorf("failed to send PONG: %w", err)
 				}
 			case irc.PrivateMessage:
+				if b.messageHandler.onPrivateMessage == nil {
+					continue
+				}
 				msg, err := domain.MakeChatMessage(message)
 				if err != nil {
 					b.errors <- fmt.Errorf("failed to map chat message %w", err)
 					continue
 				}
 
-				if b.messageHandler.onPrivateMessage != nil {
-					b.messageHandler.onPrivateMessage(*msg)
-				}
+				b.messageHandler.onPrivateMessage(*msg)
 			case irc.ClearChat:
+				if b.messageHandler.onBan == nil {
+					continue
+				}
 				ban, err := domain.NewBan(message)
 				if err != nil {
 					b.errors <- fmt.Errorf("failed to map ban message %w", err)
 					continue
 				}
-				if b.messageHandler.onBan != nil {
-					b.messageHandler.onBan(*ban)
-				}
+				b.messageHandler.onBan(*ban)
 			case irc.EndOfMOTD:
 				// Connected & ready to join channels
-				b.loginError <- nil
+				if b.loggingIn {
+					b.loginError <- nil
+				}
 			// ERR_PASSWDMISMATCH
 			case irc.ErrPasswordMismatch:
-				b.loginError <- ErrBadPassword
+				if b.loggingIn {
+					b.loginError <- ErrBadPassword
+				}
 			// Ignored messages
 			case "001", "002", "003", "004", "375", "372", "353", "366":
 			default:
@@ -90,8 +102,15 @@ func (b *Bot) ProcessMessages(ctx context.Context) {
 
 // Login logs into the IRC server using the name and password, blocking until either the login was successful, fails or the context is cancelled
 func (b *Bot) Login(ctx context.Context, name, pass string) error {
+	// TODO: Write some tests around getting login errors after we're done logging in etc
+	b.loginMux.Lock()
+	b.loggingIn = true
 	b.loginError = make(chan error)
-	defer close(b.loginError)
+	defer func() {
+		b.loggingIn = false
+		close(b.loginError)
+		b.loginMux.Unlock()
+	}()
 	if err := b.ircReadWriter.Send(twitch.MakePassCommand(pass), twitch.MakeNickCommand(name)); err != nil {
 		return err
 	}
