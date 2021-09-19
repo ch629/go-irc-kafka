@@ -155,8 +155,3 @@ func (cli *client) error(err error) {
 		}
 	}
 }
-
-func (cli *client) write(msg IrcMessage) error {
-	_, err := cli.conn.Write(append(msg.Bytes(), '\r', '\n'))
-	return err
-}
