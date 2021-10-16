@@ -11,9 +11,10 @@ import (
 
 type (
 	Config struct {
-		Bot   Bot
-		Kafka Kafka
-		Irc   Irc
+		Bot          Bot
+		Kafka        Kafka
+		Irc          Irc
+		Orchestrator Orchestrator
 	}
 	Bot struct {
 		Name     string
@@ -25,6 +26,9 @@ type (
 		Topic   string
 	}
 	Irc struct {
+		Address string
+	}
+	Orchestrator struct {
 		Address string
 	}
 )
@@ -42,6 +46,9 @@ var (
 		},
 		Irc: Irc{
 			Address: "irc.chat.twitch.tv:6667",
+		},
+		Orchestrator: Orchestrator{
+			Address: ":8080",
 		},
 	}
 

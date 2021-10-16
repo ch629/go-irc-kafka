@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 )
 
-//go:generate mockery --name=IRCReadWriter
+//go:generate mockery --name=IRCReadWriter --disable-version-string
 type IRCReadWriter interface {
 	Input() <-chan parser.Message
 	Send(messages ...client.IrcMessage) error
@@ -128,6 +128,15 @@ func (b *Bot) Login(ctx context.Context, name, pass string) error {
 func (b *Bot) JoinChannels(channels ...string) error {
 	for _, ch := range channels {
 		if err := b.ircReadWriter.Send(twitch.MakeJoinCommand(ch)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (b *Bot) LeaveChannels(channels ...string) error {
+	for _, ch := range channels {
+		if err := b.ircReadWriter.Send(twitch.MakePartCommand(ch)); err != nil {
 			return err
 		}
 	}

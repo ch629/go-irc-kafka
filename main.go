@@ -18,12 +18,16 @@ import (
 	_ "github.com/dimiro1/banner/autoload"
 	"github.com/spf13/afero"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
+
+	botClient "github.com/ch629/bot-orchestrator/pkg/client"
 )
 
 // https://tools.ietf.org/html/rfc1459.html
 
 func main() {
 	log := zap.L()
+	defer log.Sync()
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
@@ -55,7 +59,7 @@ func main() {
 	messageHandler.OnBan(func(ban domain.Ban) {
 		log.Debug("received ban message", zap.Any("msg", ban))
 		if err := producer.SendBan(ban); err != nil {
-			log.Warn("failed ot send ban message", zap.Error(err))
+			log.Warn("failed to send ban message", zap.Error(err))
 		}
 	})
 
@@ -78,11 +82,41 @@ func main() {
 	if err := bot.RequestCapability(twitch.COMMANDS, twitch.MEMBERSHIP, twitch.TAGS); err != nil {
 		log.Fatal("failed to request capabilities", zap.Error(err))
 	}
-	if err := bot.JoinChannels(conf.Bot.Channels...); err != nil {
-		log.Fatal("failed to join channels", zap.Error(err))
+
+	conn, err := grpc.DialContext(ctx, conf.Orchestrator.Address, grpc.WithInsecure())
+	if err != nil {
+		log.Fatal("failed to dial grpc", zap.Error(err))
 	}
+	id, err := botClient.Join(ctx, conn, &orchestratorClient{
+		logger: log,
+		bot:    bot,
+	})
+	if err != nil {
+		log.Fatal("failed to join to orchestrator", zap.Error(err))
+	}
+	log.Info("joined orchestrator", zap.String("bot_id", id.String()))
 	<-ctx.Done()
 	log.Info("closing")
+}
+
+type orchestratorClient struct {
+	logger *zap.Logger
+	bot    *bot.Bot
+}
+
+func (c *orchestratorClient) JoinChannel(channel string) {
+	c.logger.Info("joining", zap.String("channel", channel))
+	c.bot.JoinChannels(channel)
+}
+
+func (c *orchestratorClient) LeaveChannel(channel string) {
+	c.logger.Info("leaving", zap.String("channel", channel))
+	c.bot.LeaveChannels(channel)
+}
+
+func (c *orchestratorClient) Close() {
+	c.logger.Info("closing")
+	// TODO: Close bot
 }
 
 func makeIrcClient(ctx context.Context, address string) (ircClient client.IrcClient, err error) {

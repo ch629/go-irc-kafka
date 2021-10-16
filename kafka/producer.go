@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 )
 
-//go:generate mockery --name=Producer
+//go:generate mockery --name=Producer --disable-version-string
 type (
 	Producer interface {
 		SendChatMessage(message domain.ChatMessage) error
