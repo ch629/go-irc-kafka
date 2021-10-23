@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"os/signal"
@@ -57,7 +56,7 @@ func main() {
 		log.Fatal("failed to create producer", zap.Error(err))
 	}
 
-	messageHandler := &bot.MessageHandler{}
+	messageHandler := bot.MessageHandler{}
 
 	messageHandler.OnPrivateMessage(func(msg domain.ChatMessage) {
 		log.Debug("received private message", zap.Any("msg", msg))
@@ -71,15 +70,12 @@ func main() {
 			log.Warn("failed to send ban message", zap.Error(err))
 		}
 	})
+	messageHandler.OnError(func(err error) {
+		log.Error("err from bot", zap.Error(err))
+	})
 
-	bot := bot.New(ircClient, *messageHandler)
+	bot := bot.New(ircClient, messageHandler)
 	log.Info("created bot")
-
-	go func() {
-		for err := range bot.Errors() {
-			log.Error("err from bot", zap.Error(err))
-		}
-	}()
 
 	go bot.ProcessMessages(ctx)
 	log.Info("processing messages")
@@ -132,6 +128,8 @@ func makeIrcClient(ctx context.Context, address string) (ircClient client.IrcCli
 	log := zap.L()
 	// Sometimes the client closes instantly, retry it 3 times
 	// TODO: Do we still need this?
+	timer := time.NewTimer(10 * time.Millisecond)
+	defer timer.Stop()
 	for i := 0; i < 3; i++ {
 		conn, err := makeConnection(address)
 		if err != nil {
@@ -139,6 +137,8 @@ func makeIrcClient(ctx context.Context, address string) (ircClient client.IrcCli
 		}
 		ircClient = client.NewClient(ctx, conn)
 		go ircClient.ConsumeMessages()
+		timer.Stop()
+		timer.Reset(10 * time.Millisecond)
 		select {
 		case <-ircClient.Done():
 			err = ircClient.Err()
@@ -146,9 +146,7 @@ func makeIrcClient(ctx context.Context, address string) (ircClient client.IrcCli
 			// Make sure the connection is closed if we're retrying
 			conn.Close()
 			continue
-		// FIXME: This leaks the goroutine -> only 10ms though
-		case <-time.After(10 * time.Millisecond):
-			err = errors.New("timed out")
+		case <-timer.C:
 		}
 		break
 	}

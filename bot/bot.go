@@ -22,7 +22,6 @@ type IRCReadWriter interface {
 
 type Bot struct {
 	ircReadWriter  IRCReadWriter
-	errors         chan error
 	messageHandler MessageHandler
 	loginError     chan error
 	logger         *zap.Logger
@@ -36,7 +35,6 @@ var ErrBadPassword = errors.New("bad password")
 func New(irc IRCReadWriter, messageHandler MessageHandler) *Bot {
 	return &Bot{
 		ircReadWriter:  irc,
-		errors:         make(chan error),
 		messageHandler: messageHandler,
 		logger:         zap.L(),
 	}
@@ -44,8 +42,6 @@ func New(irc IRCReadWriter, messageHandler MessageHandler) *Bot {
 
 func (b *Bot) ProcessMessages(ctx context.Context) {
 	log := b.logger
-	// TODO: This is assuming we'll only ever call this in 1 goroutine
-	defer close(b.errors)
 	for {
 		select {
 		case message, ok := <-b.ircReadWriter.Input():
@@ -56,7 +52,7 @@ func (b *Bot) ProcessMessages(ctx context.Context) {
 			switch message.Command {
 			case irc.Ping:
 				if err := b.ircReadWriter.Send(twitch.MakePongCommand(message.Params[0])); err != nil {
-					b.errors <- fmt.Errorf("failed to send PONG: %w", err)
+					b.error(fmt.Errorf("failed to send PONG: %w", err))
 				}
 			case irc.PrivateMessage:
 				if b.messageHandler.onPrivateMessage == nil {
@@ -64,7 +60,7 @@ func (b *Bot) ProcessMessages(ctx context.Context) {
 				}
 				msg, err := domain.MakeChatMessage(message)
 				if err != nil {
-					b.errors <- fmt.Errorf("failed to map chat message %w", err)
+					b.error(fmt.Errorf("failed to map chat message %w", err))
 					continue
 				}
 
@@ -75,7 +71,7 @@ func (b *Bot) ProcessMessages(ctx context.Context) {
 				}
 				ban, err := domain.NewBan(message)
 				if err != nil {
-					b.errors <- fmt.Errorf("failed to map ban message %w", err)
+					b.error(fmt.Errorf("failed to map ban message %w", err))
 					continue
 				}
 				b.messageHandler.onBan(*ban)
@@ -97,6 +93,12 @@ func (b *Bot) ProcessMessages(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		}
+	}
+}
+
+func (b *Bot) error(err error) {
+	if b.messageHandler.onError != nil && err != nil {
+		b.messageHandler.onError(err)
 	}
 }
 
@@ -150,8 +152,4 @@ func (b *Bot) RequestCapability(capabilities ...twitch.Capability) error {
 		}
 	}
 	return nil
-}
-
-func (b *Bot) Errors() <-chan error {
-	return b.errors
 }
