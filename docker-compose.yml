@@ -2,12 +2,7 @@ version: '3.8'
 
 services:
   redpanda:
-    image: vectorized/redpanda:latest
-    volumes:
-      - ./redpanda-init.sh:/redpanda-init.sh
-    entrypoint:
-      - sh
-      - /redpanda-init.sh
+    image: docker.vectorized.io/vectorized/redpanda:latest 
     ports:
-      - 9092:9092
-      - 29092:29092
+      - "9092:9092"
+      - "9644:9644"

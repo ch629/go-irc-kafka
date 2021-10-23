@@ -17,9 +17,8 @@ type (
 		Orchestrator Orchestrator
 	}
 	Bot struct {
-		Name     string
-		OAuth    string
-		Channels []string
+		Name  string
+		OAuth string
 	}
 	Kafka struct {
 		Brokers []string
@@ -36,9 +35,8 @@ type (
 var (
 	config = Config{
 		Bot: Bot{
-			Name:     "",
-			OAuth:    "",
-			Channels: []string{},
+			Name:  "",
+			OAuth: "",
 		},
 		Kafka: Kafka{
 			Brokers: []string{"localhost:9092"},

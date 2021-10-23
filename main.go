@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os/signal"
@@ -43,7 +44,15 @@ func main() {
 		log.Fatal("failed to make irc client", zap.Error(err))
 	}
 
-	producer, err := kafka.NewProducer(conf.Kafka)
+	client, err := kafka.NewClient(conf.Kafka)
+	if err != nil {
+		log.Fatal("failed to create kafka client", zap.Error(err))
+	}
+	defer client.Close()
+	if len(client.Brokers()) == 0 {
+		log.Fatal("failed to connect to kafka brokers", zap.Error(err))
+	}
+	producer, err := kafka.NewProducer(client)
 	if err != nil {
 		log.Fatal("failed to create producer", zap.Error(err))
 	}
@@ -87,7 +96,7 @@ func main() {
 	if err != nil {
 		log.Fatal("failed to dial grpc", zap.Error(err))
 	}
-	id, err := botClient.Join(ctx, conn, &orchestratorClient{
+	id, err := botClient.Join(ctx, conn, orchestratorClient{
 		logger: log,
 		bot:    bot,
 	})
@@ -104,17 +113,17 @@ type orchestratorClient struct {
 	bot    *bot.Bot
 }
 
-func (c *orchestratorClient) JoinChannel(channel string) {
+func (c orchestratorClient) JoinChannel(channel string) {
 	c.logger.Info("joining", zap.String("channel", channel))
 	c.bot.JoinChannels(channel)
 }
 
-func (c *orchestratorClient) LeaveChannel(channel string) {
+func (c orchestratorClient) LeaveChannel(channel string) {
 	c.logger.Info("leaving", zap.String("channel", channel))
 	c.bot.LeaveChannels(channel)
 }
 
-func (c *orchestratorClient) Close() {
+func (c orchestratorClient) Close() {
 	c.logger.Info("closing")
 	// TODO: Close bot
 }
@@ -137,7 +146,9 @@ func makeIrcClient(ctx context.Context, address string) (ircClient client.IrcCli
 			// Make sure the connection is closed if we're retrying
 			conn.Close()
 			continue
+		// FIXME: This leaks the goroutine -> only 10ms though
 		case <-time.After(10 * time.Millisecond):
+			err = errors.New("timed out")
 		}
 		break
 	}

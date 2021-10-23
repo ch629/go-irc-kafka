@@ -24,6 +24,7 @@ type (
 		sarama.SyncProducer
 	}
 
+	// TODO: Pull these out into some model package?
 	chatMessage struct {
 		ID          uuid.UUID `json:"id"`
 		ChannelName string    `json:"channel_name"`
@@ -52,15 +53,17 @@ type (
 	}
 )
 
-func NewProducer(kafkaConfig config.Kafka) (Producer, error) {
+func NewClient(kafkaConfig config.Kafka) (sarama.Client, error) {
 	saramaConfig := sarama.NewConfig()
-	brokers := kafkaConfig.Brokers
 	saramaConfig.Producer.Partitioner = sarama.NewRoundRobinPartitioner
 	saramaConfig.Producer.Compression = sarama.CompressionSnappy
 	saramaConfig.Producer.Return.Errors = true
 	saramaConfig.Producer.Return.Successes = true
+	return sarama.NewClient(kafkaConfig.Brokers, saramaConfig)
+}
 
-	pro, err := sarama.NewSyncProducer(brokers, saramaConfig)
+func NewProducer(client sarama.Client) (Producer, error) {
+	pro, err := sarama.NewSyncProducerFromClient(client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create async kafka producer due to %w", err)
 	}
