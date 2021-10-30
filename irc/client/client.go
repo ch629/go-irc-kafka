@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/ch629/go-irc-kafka/irc/parser"
@@ -44,68 +45,68 @@ type (
 )
 
 func NewClient(ctx context.Context, conn io.ReadWriteCloser) IrcClient {
-	cli := &client{
-		conn:      conn,
-		inputChan: make(chan parser.Message),
-		errorChan: make(chan error),
-		done:      make(chan struct{}),
-		scanner:   parser.NewScanner(conn),
+	ctx, cancelFunc := context.WithCancel(ctx)
+	return &client{
+		conn:       conn,
+		inputChan:  make(chan parser.Message),
+		errorChan:  make(chan error),
+		done:       make(chan struct{}),
+		scanner:    parser.NewScanner(conn),
+		ctx:        ctx,
+		cancelFunc: cancelFunc,
 	}
-	cli.ctx, cli.cancelFunc = context.WithCancel(ctx)
-
-	return cli
 }
 
 // TODO: Pass ctx?
-func (cli *client) ConsumeMessages() {
-	defer cli.cleanup()
-	cli.readInput()
+func (c *client) ConsumeMessages() {
+	defer c.cleanup()
+	c.readInput()
 }
 
-func (cli *client) Send(messages ...IrcMessage) error {
+func (c *client) Send(messages ...IrcMessage) error {
 	for _, msg := range messages {
 		// TODO: Retry?
-		if _, err := cli.conn.Write(append(msg.Bytes(), '\r', '\n')); err != nil {
-			return err
+		if _, err := c.conn.Write(append(msg.Bytes(), '\r', '\n')); err != nil {
+			return fmt.Errorf("conn.Write: %w", err)
 		}
 	}
 	return nil
 }
 
-func (cli *client) Err() error {
-	return cli.err
+func (c *client) Err() error {
+	return c.err
 }
 
-func (cli *client) Done() <-chan struct{} {
-	return cli.done
+func (c *client) Done() <-chan struct{} {
+	return c.done
 }
 
 // cleanup closes all channels once goroutines are finished
-func (cli *client) cleanup() {
-	close(cli.inputChan)
-	close(cli.errorChan)
-	cli.conn.Close()
-	close(cli.done)
+func (c *client) cleanup() {
+	close(c.inputChan)
+	close(c.errorChan)
+	c.conn.Close()
+	close(c.done)
 }
 
 // Input from the IRC connection
-func (cli *client) Input() <-chan parser.Message {
-	return cli.inputChan
+func (c *client) Input() <-chan parser.Message {
+	return c.inputChan
 }
 
 // Errors from IRC input/output
-func (cli *client) Errors() <-chan error {
-	return cli.errorChan
+func (c *client) Errors() <-chan error {
+	return c.errorChan
 }
 
 // Close closes the connection & cancels goroutines
-func (cli *client) Close() error {
-	cli.cancelFunc()
+func (c *client) Close() error {
+	c.cancelFunc()
 	return nil
 }
 
-func (cli *client) Closed() bool {
-	return cli.ctx.Err() != nil
+func (c *client) Closed() bool {
+	return c.ctx.Err() != nil
 }
 
 // messageError is used for scanning to return either a message or an error
@@ -114,43 +115,43 @@ type messageError struct {
 	Error   error
 }
 
-func (cli *client) scan() <-chan messageError {
+func (c *client) scan() <-chan messageError {
 	msgChan := make(chan messageError)
 	go func() {
 		defer close(msgChan)
-		message, err := cli.scanner.Scan()
+		message, err := c.scanner.Scan()
 		msgChan <- messageError{message, err}
 	}()
 	return msgChan
 }
 
 // Scans the IRC messages and writes them to the input channel
-func (cli *client) readInput() {
+func (c *client) readInput() {
 	for {
 		select {
-		case <-cli.ctx.Done():
+		case <-c.ctx.Done():
 			return
-		case message := <-cli.scan():
+		case message := <-c.scan():
 			err := message.Error
 			if err != nil {
 				if errors.Is(err, io.EOF) {
-					cli.err = err
-					cli.cancelFunc()
+					c.err = err
+					c.cancelFunc()
 					return
 				}
-				cli.error(err)
+				c.error(err)
 				continue
 			}
 			msg := *message.Message
-			cli.inputChan <- msg
+			c.inputChan <- msg
 		}
 	}
 }
 
-func (cli *client) error(err error) {
-	if err != nil && !cli.Closed() {
+func (c *client) error(err error) {
+	if err != nil && !c.Closed() {
 		select {
-		case cli.errorChan <- err:
+		case c.errorChan <- err:
 		default:
 		}
 	}

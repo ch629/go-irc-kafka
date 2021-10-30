@@ -76,7 +76,7 @@ func NewProducer(client sarama.Client) (Producer, error) {
 
 func (producer *producer) SendChatMessage(message domain.ChatMessage) error {
 	chatMessage := mapChatMessage(message)
-	enc, err := NewJsonEncoder(chatMessage)
+	enc, err := NewJSONEncoder(chatMessage)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func (producer *producer) SendChatMessage(message domain.ChatMessage) error {
 
 func (producer *producer) SendBan(ban domain.Ban) error {
 	banMessage := mapBan(ban)
-	enc, err := NewJsonEncoder(banMessage)
+	enc, err := NewJSONEncoder(banMessage)
 	if err != nil {
 		return err
 	}

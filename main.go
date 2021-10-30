@@ -27,7 +27,9 @@ import (
 
 func main() {
 	log := zap.L()
-	defer log.Sync()
+	defer func() {
+		_ = log.Sync()
+	}()
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
@@ -74,6 +76,7 @@ func main() {
 		log.Error("err from bot", zap.Error(err))
 	})
 
+	// TODO: Closing this bot without context?
 	bot := bot.New(ircClient, messageHandler)
 	log.Info("created bot")
 
@@ -92,6 +95,7 @@ func main() {
 	if err != nil {
 		log.Fatal("failed to dial grpc", zap.Error(err))
 	}
+	defer conn.Close()
 	id, err := botClient.Join(ctx, conn, orchestratorClient{
 		logger: log,
 		bot:    bot,
@@ -111,12 +115,12 @@ type orchestratorClient struct {
 
 func (c orchestratorClient) JoinChannel(channel string) {
 	c.logger.Info("joining", zap.String("channel", channel))
-	c.bot.JoinChannels(channel)
+	_ = c.bot.JoinChannels(channel)
 }
 
 func (c orchestratorClient) LeaveChannel(channel string) {
 	c.logger.Info("leaving", zap.String("channel", channel))
-	c.bot.LeaveChannels(channel)
+	_ = c.bot.LeaveChannels(channel)
 }
 
 func (c orchestratorClient) Close() {
