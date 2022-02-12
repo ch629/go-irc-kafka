@@ -43,11 +43,13 @@ func main() {
 	if err != nil {
 		log.Fatal("failed to make irc client", zap.Error(err))
 	}
+	log.Info("connected to IRC", zap.String("address", conf.Irc.Address))
 
 	producer, err := nats.NewProducer("nats:4222")
 	if err != nil {
 		log.Fatal("failed to create producer", zap.Error(err))
 	}
+	log.Info("connected to nats")
 
 	messageHandler := bot.MessageHandler{}
 
@@ -73,7 +75,7 @@ func main() {
 
 	go bot.ProcessMessages(ctx)
 	log.Info("processing messages")
-	if err := bot.Login(ctx, conf.Bot.Name, conf.Bot.OAuth); err != nil {
+	if err := bot.Login(ctx, conf.Bot.Name, conf.Bot.OAuth, 5*time.Second); err != nil {
 		log.Fatal("error when logging in", zap.Error(err))
 	}
 	log.Info("logged in successfully")
@@ -82,7 +84,12 @@ func main() {
 		log.Fatal("failed to request capabilities", zap.Error(err))
 	}
 
-	conn, err := grpc.DialContext(ctx, conf.Orchestrator.Address, grpc.WithInsecure())
+	conn, err := grpc.DialContext(
+		ctx,
+		conf.Orchestrator.Address,
+		grpc.WithInsecure(),
+		grpc.WithBlock(),
+	)
 	if err != nil {
 		log.Fatal("failed to dial grpc", zap.Error(err))
 	}

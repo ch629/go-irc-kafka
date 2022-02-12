@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/ch629/go-irc-kafka/pkg/domain"
 	"github.com/ch629/go-irc-kafka/pkg/irc"
@@ -30,7 +32,10 @@ type Bot struct {
 	loggingIn bool
 }
 
-var ErrBadPassword = errors.New("bad password")
+var (
+	ErrBadPassword = errors.New("bad password")
+	ErrBadUsername = errors.New("bad username")
+)
 
 func New(irc IRCReadWriter, messageHandler MessageHandler) *Bot {
 	return &Bot{
@@ -87,6 +92,12 @@ func (b *Bot) ProcessMessages(ctx context.Context) {
 				}
 			// Ignored messages
 			case "001", "002", "003", "004", "375", "372", "353", "366":
+			case irc.Notice:
+				if b.loggingIn && strings.Contains(strings.Join(message.Params, ""), "Invalid NICK") {
+					b.loginError <- ErrBadUsername
+					return
+				}
+				fallthrough
 			default:
 				log.Info("received unhandled command", zap.String("command", message.Command), zap.String("message", fmt.Sprintf("%+v", message)))
 			}
@@ -103,8 +114,10 @@ func (b *Bot) error(err error) {
 }
 
 // Login logs into the IRC server using the name and password, blocking until either the login was successful, fails or the context is cancelled
-func (b *Bot) Login(ctx context.Context, name, pass string) error {
+func (b *Bot) Login(ctx context.Context, name, pass string, timeout time.Duration) error {
 	// TODO: Write some tests around getting login errors after we're done logging in etc
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	b.loginMux.Lock()
 	b.loggingIn = true
 	b.loginError = make(chan error)
@@ -122,7 +135,7 @@ func (b *Bot) Login(ctx context.Context, name, pass string) error {
 			return err
 		}
 	case <-ctx.Done():
-		return ctx.Err()
+		return errors.New("timed out")
 	}
 	return nil
 }

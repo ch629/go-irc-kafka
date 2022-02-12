@@ -17,3 +17,6 @@ fmt:
 	gofumpt -l -w .
 
 checks: test lint fmt
+
+kubefwd:
+	@sudo -E kubefwd svc -n default
