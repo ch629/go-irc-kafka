@@ -1,8 +1,8 @@
 build:
-	go build -o=app .
+	go build ./cmd/bot
 
 run: build
-	./app
+	./bot
 	
 test:
 	go test -race -timeout=5s ./...

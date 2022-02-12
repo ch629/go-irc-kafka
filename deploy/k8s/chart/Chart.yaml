@@ -1,0 +1,8 @@
+apiVersion: v1
+appVersion: latest
+description: Helm chart for irc-bot
+name: irc-bot
+version: 0.0.1
+maintainers:
+  - name: Charlie Howes
+    email: charliehowes97@outlook.com

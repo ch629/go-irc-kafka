@@ -1,0 +1,22 @@
+apiVersion: skaffold/v2beta26
+kind: Config
+build:
+  artifacts:
+    - image: irc-bot
+      ko: 
+        main: ./cmd/bot
+deploy:
+  helm:
+    releases:
+      - name: nats
+        remoteChart: https://github.com/nats-io/k8s/releases/download/v0.9.2/nats-0.9.2.tgz
+        namespace: default
+        setValues:
+          nats.jetstream.enabled: "true"
+        upgradeOnChange: false
+      - name: irc-bot
+        chartPath: deploy/k8s/chart
+        artifactOverrides:
+          image: irc-bot
+        valuesFiles:
+          - deploy/k8s/values.yaml

@@ -1,6 +1,0 @@
-{{ .Title "go-irc-kafka" "" 2 }}
-  GoVersion: {{ .GoVersion }}
-  GOOS:      {{ .GOOS }}
-  GOARCH:    {{ .GOARCH }}
-  NumCPU:    {{ .NumCPU }}
-
